@@ -23,16 +23,33 @@ held" is L0 and L1.
 ## Install
 
 ```bash
-# once per machine
 claude plugin marketplace add anasmallick35/talview-agent-ecosystem
 
-# per workspace
-/plugin install talview-core@talview
-/plugin install talview-delivery@talview
+/plugin install talview-core@talview     # gates — install this one everywhere
+/plugin install tlv@talview              # the delivery tracks
 /plugin install talview-verify@talview
 /plugin install talview-review@talview
 /plugin install talview-learn@talview
 ```
+
+## Use it
+
+```
+/tlv:start WFT-1234                 classify, gather context, start a run
+/tlv:start https://linear.app/...   a ticket URL works too
+```
+
+`start` routes to a track. The feature track has exactly one human gate: the ADR, opened
+as a docs-only pull request you review and approve. Everything after approval runs to an
+open PR without stopping.
+
+| Skill | Phase |
+| --- | --- |
+| `/tlv:start` | classify and route |
+| `/tlv:audit` | reuse, pattern, design and backend scans |
+| `/tlv:feature` | the feature track |
+| `/talview-verify:verify-browser` | drive the real UI, capture evidence |
+| `/talview-learn:learn` | review feedback into enforcement |
 
 Local development against a checkout:
 
@@ -45,15 +62,15 @@ claude --plugin-dir ./plugins/talview-core
 | Plugin | What it does |
 | --- | --- |
 | `talview-core` | The enforcement layer. Edit-time lint feedback, definition-of-done gate, evidence-gated push, session state injection. |
-| `talview-delivery` | Intake router plus feature, bug, sentry and tech-debt tracks. Carries a ticket from audit through ADR to an open PR. |
+| `tlv` | Intake router plus the delivery tracks. Carries a ticket from audit through ADR to an open PR. |
 | `talview-verify` | Browser, network and accessibility verification that produces evidence artifacts rather than claims. |
 | `talview-review` | React/TypeScript code quality rubric, applied before writing and when reviewing a diff. |
 | `talview-learn` | Harvests PR review feedback and routes each lesson to lint, hook, skill or CLAUDE.md. |
 
 ## Per-workspace configuration
 
-`talview-core` ships defaults in `plugins/talview-core/config/defaults.json`. A workspace
-overrides them with `.tlv/config.json` at its repo root:
+`talview-core` ships defaults; a workspace overrides them at
+`~/.talview/<repo>/config.json`:
 
 ```json
 {
@@ -65,7 +82,9 @@ overrides them with `.tlv/config.json` at its repo root:
 
 ## Run state
 
-A tracked run lives in `.tlv/runs/<branch-slug>.json` in the target workspace:
+A tracked run lives **outside** the target repo, in `~/.talview/<repo>/runs/<branch-slug>.json`.
+The product repository is a deliverable, not a scratchpad — it never needs a `.gitignore`
+entry for our bookkeeping:
 
 ```json
 {
@@ -77,8 +96,7 @@ A tracked run lives in `.tlv/runs/<branch-slug>.json` in the target workspace:
 }
 ```
 
-`phase` decides which gates are live. Outside a tracked run the gates stay silent, so
-ad-hoc sessions behave exactly as they did before. `.tlv/runs/<branch-slug>.evidence.json`
-is the ledger the push gate reads.
-
-Add `.tlv/` to the target repo's `.gitignore`.
+The track sets `armed` when a phase is past building, and that is the only thing the
+gates read — `talview-core` does not know the track's phase names. Outside a tracked run
+the gates stay silent, so ad-hoc sessions behave exactly as they did before.
+`<branch-slug>.evidence.json` alongside it is the ledger the push gate reads.
