@@ -1,9 +1,12 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "talview-learn",
-  "displayName": "Talview Learn — Self-Improvement Loop",
-  "version": "0.1.0",
+  "displayName": "Talview Learn \u2014 Self-Improvement Loop",
+  "version": "0.2.0",
   "description": "Harvests PR review feedback into enforceable rules and routes each lesson to lint, hook, skill or CLAUDE.md.",
-  "author": { "name": "Md Anas", "email": "md.anas@talview.com" },
+  "author": {
+    "name": "Md Anas",
+    "email": "md.anas@talview.com"
+  },
   "license": "MIT"
 }
