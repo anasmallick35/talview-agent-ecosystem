@@ -12,9 +12,8 @@ tlv_have jq || exit 0
 
 run_file="$(tlv_run_file)" || exit 0
 [ -f "$run_file" ] || exit 0
-case "$(jq -r '.phase // empty' "$run_file" 2>/dev/null)" in
-  implement|verify|review) ;; *) exit 0 ;;
-esac
+# The track owns the phase vocabulary; core only asks whether gates are armed.
+[ "$(jq -r '.armed // false' "$run_file" 2>/dev/null)" = "true" ] || exit 0
 
 report="$("${CLAUDE_PLUGIN_ROOT}/scripts/dod-check.sh" 2>/dev/null)"
 [ -z "$report" ] && {

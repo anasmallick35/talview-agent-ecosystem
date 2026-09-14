@@ -1,0 +1,280 @@
+{
+  "$comment": "Phase -> capability mapping. 'workspace' entries live in the target repo's .claude/ and are CALLED, never copied. 'plugin' entries ship here because they do not exist in the workspace. A phase whose required skills are all missing degrades to its fallback and says so out loud.",
+  "workspaceRoot": ".claude",
+  "phases": {
+    "intake": {
+      "plugin": [
+        "tlv-intake"
+      ],
+      "fallback": "Classify from the ticket text alone and state the classification."
+    },
+    "audit": {
+      "plugin": [
+        "tlv-audit"
+      ],
+      "workspaceAgents": [
+        "Explore"
+      ],
+      "tools": [
+        "ripgrep",
+        "jscpd",
+        "knip"
+      ],
+      "fallback": "Grep-only reuse scan; record reduced confidence in the ADR.",
+      "$toolNote": "ast-grep evaluated and deferred: it returns zero matches, silently, for any path argument containing [ or ] \u2014 which this repo's route directories use throughout. Revisit if that is fixed upstream."
+    },
+    "brainstorm": {
+      "workspace": [
+        "brainstorming"
+      ],
+      "fallback": "Present 2-4 approaches with tradeoffs against the CLAUDE.md priority order before choosing."
+    },
+    "adr": {
+      "workspace": [
+        "adr-author",
+        "factual-terse"
+      ],
+      "output": "docs/adr/",
+      "fallback": "Follow the structure of the most recent file in docs/adr/."
+    },
+    "plan": {
+      "workspace": [
+        "writing-plans",
+        "stack-planning",
+        "issue-management",
+        "epic-management"
+      ],
+      "output": "docs/plans/",
+      "fallback": "One plan file per stacked PR with goal, changes, acceptance criteria."
+    },
+    "branch": {
+      "workspace": [
+        "git-workflows",
+        "worktree-setup"
+      ],
+      "fallback": "Feature branch off develop; never commit to a protected branch."
+    },
+    "implement_ui": {
+      "workspace": [
+        "component-architecture",
+        "teserra-components",
+        "teserra-component-builder",
+        "css-styling"
+      ],
+      "workspaceAgents": [
+        "component-architect"
+      ],
+      "mcp": [
+        "storybook"
+      ],
+      "fallback": "Verify every Teserra export via the Storybook MCP before importing it."
+    },
+    "implement_logic": {
+      "workspace": [
+        "react-hooks",
+        "state-management",
+        "xstate",
+        "graphql-codegen"
+      ],
+      "workspaceAgents": [
+        "react-pro",
+        "typescript-frontend"
+      ],
+      "fallback": "Follow the two most recently merged comparable features."
+    },
+    "implement_module": {
+      "conditional": {
+        "modules/exam/": [
+          "exam-module"
+        ],
+        "modules/scheduler/": [
+          "scheduler-module"
+        ]
+      }
+    },
+    "i18n": {
+      "workspaceAgents": [
+        "i18n-compliance"
+      ],
+      "fallback": "Audit every user-facing string, JSX children and props alike."
+    },
+    "telemetry": {
+      "workspace": [
+        "telemetry"
+      ],
+      "workspaceAgents": [
+        "telemetry-expert"
+      ],
+      "fallback": "Follow the event naming convention already used in the module."
+    },
+    "test_unit": {
+      "workspace": [
+        "test-driven-development"
+      ],
+      "workspaceAgents": [
+        "test-engineer"
+      ],
+      "fallback": "RTL with accessible queries; behaviour not implementation."
+    },
+    "test_stories": {
+      "workspace": [
+        "storybook-writer"
+      ],
+      "mcp": [
+        "storybook"
+      ],
+      "fallback": "One story per meaningful state, including loading, empty and error."
+    },
+    "test_e2e": {
+      "workspace": [
+        "e2e-expert",
+        "test-driven-development"
+      ],
+      "fallback": "Cover all ten branches named in CLAUDE.md Testing."
+    },
+    "a11y": {
+      "workspace": [
+        "web-interface-audit"
+      ],
+      "workspaceAgents": [
+        "accessibility-expert"
+      ],
+      "fallback": "WCAG 2.2 AA: keyboard, contrast, focus, semantics."
+    },
+    "verify_browser": {
+      "plugin": [
+        "tlv-verify-browser"
+      ],
+      "workspace": [
+        "playwright-login"
+      ],
+      "mcp": [
+        "playwright",
+        "chrome-devtools"
+      ],
+      "fallback": "Cypress run only; record that live browser verification was skipped."
+    },
+    "perf": {
+      "workspace": [
+        "react-performance"
+      ],
+      "workspaceAgents": [
+        "performance-optimizer"
+      ],
+      "optional": true
+    },
+    "self_review": {
+      "workspace": [
+        "code-review",
+        "verification-before-completion"
+      ],
+      "plugin": [
+        "react-code-quality"
+      ],
+      "fallback": "Run the checklist in react-code-quality/CHECKLIST.md."
+    },
+    "ship": {
+      "workspace": [
+        "finishing-branch",
+        "git-workflows"
+      ],
+      "fallback": "gh stack submit; never gh pr merge."
+    },
+    "learn": {
+      "plugin": [
+        "tlv-learn"
+      ],
+      "fallback": "Record review feedback verbatim; do not attempt to route it."
+    }
+  },
+  "tracks": {
+    "feature": [
+      "intake",
+      "audit",
+      "brainstorm",
+      "adr",
+      "plan",
+      "branch",
+      "implement_ui",
+      "implement_logic",
+      "implement_module",
+      "i18n",
+      "telemetry",
+      "test_unit",
+      "test_stories",
+      "test_e2e",
+      "a11y",
+      "verify_browser",
+      "self_review",
+      "ship",
+      "learn"
+    ],
+    "bug": [
+      "intake",
+      "audit",
+      "adr",
+      "branch",
+      "implement_logic",
+      "test_unit",
+      "test_e2e",
+      "verify_browser",
+      "self_review",
+      "ship",
+      "learn"
+    ],
+    "sentry": [
+      "intake",
+      "audit",
+      "adr",
+      "branch",
+      "implement_logic",
+      "test_unit",
+      "self_review",
+      "ship",
+      "learn"
+    ],
+    "tech_debt": [
+      "intake",
+      "audit",
+      "brainstorm",
+      "adr",
+      "plan",
+      "branch",
+      "implement_logic",
+      "test_unit",
+      "self_review",
+      "ship",
+      "learn"
+    ]
+  },
+  "bugTrackSkills": {
+    "audit": {
+      "workspace": [
+        "systematic-debugging"
+      ]
+    },
+    "adr": {
+      "$note": "Bug track writes a fix-approach note, not a full ADR, unless the fix is architectural."
+    }
+  },
+  "sentryTrackSkills": {
+    "intake": {
+      "workspace": [
+        "sentry-triage",
+        "sentry-investigation"
+      ],
+      "mcp": [
+        "sentry"
+      ]
+    }
+  },
+  "armedPhases": [
+    "test_unit",
+    "test_stories",
+    "test_e2e",
+    "a11y",
+    "verify_browser",
+    "self_review",
+    "ship"
+  ]
+}

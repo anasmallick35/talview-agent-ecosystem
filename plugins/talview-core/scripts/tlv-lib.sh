@@ -32,12 +32,12 @@ tlv_branch() {
   git -C "$(tlv_repo_root)" rev-parse --abbrev-ref HEAD 2>/dev/null || printf ''
 }
 
-# .tlv/config.json in the workspace overrides plugin defaults.
+# <state-dir>/config.json overrides plugin defaults, per workspace.
 tlv_config() {
   local root defaults override
   root="$(tlv_repo_root)"
   defaults="${CLAUDE_PLUGIN_ROOT}/config/defaults.json"
-  override="$root/.tlv/config.json"
+  override="$(tlv_state_dir)/config.json"
   if tlv_have jq && [ -f "$override" ]; then
     jq -s '.[0] * .[1]' "$defaults" "$override" 2>/dev/null || cat "$defaults"
   else
@@ -51,14 +51,23 @@ tlv_base_branch() {
   local b; b="$(tlv_cfg '.baseBranch')"; printf '%s' "${b:-develop}"
 }
 
+# Agent state lives OUTSIDE the target repo. The product repo is a deliverable,
+# not a scratchpad: nothing here ever needs a .gitignore entry in someone else's
+# monorepo. Keyed by repo name so several checkouts can run side by side.
+tlv_state_dir() {
+  local root name
+  root="$(tlv_repo_root)"
+  name="$(basename "$root" | tr -cd '[:alnum:]._-')"
+  printf '%s/.talview/%s' "${TLV_HOME:-$HOME}" "${name:-workspace}"
+}
+
 # Run-state file for the current branch. Absent == untracked ad-hoc work.
 tlv_run_file() {
-  local root branch slug
-  root="$(tlv_repo_root)"
+  local branch slug
   branch="$(tlv_branch)"
   [ -n "$branch" ] || return 1
   slug="$(printf '%s' "$branch" | tr '/' '-' | tr -cd '[:alnum:]._-')"
-  printf '%s/.tlv/runs/%s.json' "$root" "$slug"
+  printf '%s/runs/%s.json' "$(tlv_state_dir)" "$slug"
 }
 
 tlv_run_phase() {

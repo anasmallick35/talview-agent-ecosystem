@@ -34,14 +34,14 @@ report="$("${CLAUDE_PLUGIN_ROOT}/scripts/dod-check.sh" 2>/dev/null)"; dod_rc=$?
 run_file="$(tlv_run_file)" || run_file=""
 tracked=0; [ -n "$run_file" ] && [ -f "$run_file" ] && tracked=1
 
-ledger="$root/.tlv/runs/$(printf '%s' "$branch" | tr '/' '-' | tr -cd '[:alnum:]._-').evidence.json"
+ledger="$(tlv_state_dir)/runs/$(printf '%s' "$branch" | tr '/' '-' | tr -cd '[:alnum:]._-').evidence.json"
 stale=(); absent=(); failed=()
 required="$(tlv_cfg '.push.requiredEvidence')"
 [ -n "$required" ] || required='["lint","typecheck","test"]'
 
 newest_src="$( { git diff --name-only --diff-filter=ACMR "$(tlv_merge_base)" 2>/dev/null; \
                  git ls-files --others --exclude-standard 2>/dev/null; } \
-  | grep -E '\.(ts|tsx|js|jsx|json)$' | grep -v '^\.tlv/' \
+  | grep -E '\.(ts|tsx|js|jsx|json)$' \
   | while IFS= read -r f; do [ -f "$f" ] && { stat -f %m "$f" 2>/dev/null || stat -c %Y "$f" 2>/dev/null; }; done \
   | sort -rn | head -1)"; newest_src="${newest_src:-0}"
 

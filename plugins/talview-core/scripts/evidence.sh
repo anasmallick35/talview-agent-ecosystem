@@ -15,7 +15,7 @@ export TLV_INPUT='{}'
 root="$(git rev-parse --show-toplevel 2>/dev/null || printf '%s' "$PWD")"
 branch="$(git -C "$root" rev-parse --abbrev-ref HEAD 2>/dev/null)"
 slug="$(printf '%s' "$branch" | tr '/' '-' | tr -cd '[:alnum:]._-')"
-ledger="$root/.tlv/runs/$slug.evidence.json"
+ledger="$(tlv_state_dir)/runs/$slug.evidence.json"
 mkdir -p "$(dirname "$ledger")"
 [ -f "$ledger" ] || echo '{}' > "$ledger"
 
@@ -24,7 +24,7 @@ newest_source_mtime() {
   {
     git -C "$root" diff --name-only --diff-filter=ACMR "$mb" 2>/dev/null
     git -C "$root" ls-files --others --exclude-standard 2>/dev/null
-  } | grep -E '\.(ts|tsx|js|jsx|json)$' | grep -v '^\.tlv/' | while IFS= read -r f; do
+  } | grep -E '\.(ts|tsx|js|jsx|json)$' | while IFS= read -r f; do
         [ -f "$root/$f" ] && stat -f %m "$root/$f" 2>/dev/null || stat -c %Y "$root/$f" 2>/dev/null
       done | sort -rn | head -1
 }
