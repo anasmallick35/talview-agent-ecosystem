@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "talview-delivery",
+  "displayName": "Talview Delivery — Ticket to PR",
+  "version": "0.1.0",
+  "description": "Intake router plus feature, bug, sentry and tech-debt tracks that carry a ticket from audit through ADR to an open PR.",
+  "author": { "name": "Md Anas", "email": "md.anas@talview.com" },
+  "license": "MIT",
+  "dependencies": ["talview-core"]
+}

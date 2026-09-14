@@ -1,92 +1,84 @@
-# review-skills
+# Talview Agent Ecosystem
 
-Claude Code skills for reviewing and writing React/TypeScript code.
+A Claude Code plugin marketplace for Talview frontend work: deterministic guardrails,
+ticket-to-PR pipelines, verification, review rules, and a self-improvement loop.
 
-## Skills
+## Why this exists
 
-### `react-code-quality`
+Writing more instructions does not make an agent follow them. Instructions are
+probabilistic; the rules that matter have to be enforced by something that can say no.
 
-The rules layer for React code review — what good looks like, as ~68 numbered rules,
-each written as **smell → why it's a defect → the fix**.
+This repo is organised around that split:
 
-Use it in two directions:
+| Layer | Mechanism | Skippable |
+| --- | --- | --- |
+| **L0** Deterministic gates | hooks, ESLint, CI | No — a hook exits 2 and the call does not happen |
+| **L1** Evidence gates | Stop and pre-push hooks that demand proof of done | No |
+| **L2** Procedure | skills | Yes |
+| **L3** Judgment | subagents, ADR authoring | Yes |
 
-- **Reviewing** — a PR, a diff, or code that was just generated.
-- **Writing** — read the relevant reference file *before* writing, so the code lands
-  clean the first time.
-
-| File | Covers |
-| --- | --- |
-| `SKILL.md` | Prime directive, severity tiers, Conventional Comments format, the 4-pass review workflow, the 12 gates, rule index |
-| `CHECKLIST.md` | Copy-paste pass/fail gate for a PR |
-| `reference/hooks.md` | **Hook necessity test** (`HK-1`), Rules of Hooks, custom-hook API design |
-| `reference/effects.md` | 14-pattern `useEffect` anti-pattern catalogue with a triage tree |
-| `reference/state.md` | Derived state, single source of truth, impossible states, colocation, Context |
-| `reference/components.md` | Component identity, size, props API, keys, conditional rendering |
-| `reference/clean-code.md` | The abstraction bar, naming, control flow, errors, dead code, tests |
-| `reference/typescript.md` | Type honesty, unions over optional soup, nullability |
-| `reference/performance.md` | Memoisation *correctness* — not "add `useMemo` everywhere" |
-| `reference/async-data.md` | The four states, race conditions, error handling |
-
-**The headline rule (`HK-1`):** a function is a hook **if and only if it calls another
-hook.** A `use*` function that calls no hook is a plain function wearing a hook
-costume — it forces the Rules of Hooks onto every caller, blocks conditional and
-in-handler calls, needs `renderHook` to test, and hides that the logic is pure.
+Most agent setups are all L2. The gap between "the rule is written down" and "the rule
+held" is L0 and L1.
 
 ## Install
 
-Clone once, symlink into Claude Code's user-level skills directory, and every
-workspace on the machine picks it up:
-
 ```bash
-git clone https://github.com/anasmallick35/review-skills.git ~/.claude/skills-src/review-skills
-~/.claude/skills-src/review-skills/install.sh
+# once per machine
+claude plugin marketplace add anasmallick35/talview-agent-ecosystem
+
+# per workspace
+/plugin install talview-core@talview
+/plugin install talview-delivery@talview
+/plugin install talview-verify@talview
+/plugin install talview-review@talview
+/plugin install talview-learn@talview
 ```
 
-`install.sh` symlinks each skill into `~/.claude/skills/`, so a `git pull` in the
-clone updates every workspace at once.
-
-To pull updates later:
+Local development against a checkout:
 
 ```bash
-cd ~/.claude/skills-src/review-skills && git pull
+claude --plugin-dir ./plugins/talview-core
 ```
 
-### Project-level install instead
+## Plugins
 
-To vendor the skill into one repo (so teammates and CI-side worktrees get it too),
-copy rather than symlink:
+| Plugin | What it does |
+| --- | --- |
+| `talview-core` | The enforcement layer. Edit-time lint feedback, definition-of-done gate, evidence-gated push, session state injection. |
+| `talview-delivery` | Intake router plus feature, bug, sentry and tech-debt tracks. Carries a ticket from audit through ADR to an open PR. |
+| `talview-verify` | Browser, network and accessibility verification that produces evidence artifacts rather than claims. |
+| `talview-review` | React/TypeScript code quality rubric, applied before writing and when reviewing a diff. |
+| `talview-learn` | Harvests PR review feedback and routes each lesson to lint, hook, skill or CLAUDE.md. |
 
-```bash
-cp -R ~/.claude/skills-src/review-skills/react-code-quality <repo>/.claude/skills/
+## Per-workspace configuration
+
+`talview-core` ships defaults in `plugins/talview-core/config/defaults.json`. A workspace
+overrides them with `.tlv/config.json` at its repo root:
+
+```json
+{
+  "baseBranch": "develop",
+  "dod": { "requireStories": false },
+  "push": { "requiredEvidence": ["lint", "test"] }
+}
 ```
 
-A project-level skill takes precedence over the user-level one of the same name.
+## Run state
 
-## Adapting to a non-Talview repo
+A tracked run lives in `.tlv/runs/<branch-slug>.json` in the target workspace:
 
-Most of the rubric is framework-level and portable as-is. These parts are specific to
-the `talview/webclients` monorepo — delete or rewrite them for another codebase:
+```json
+{
+  "ticket": "WFT-5456",
+  "track": "feature",
+  "phase": "implement",
+  "waivers": {},
+  "gateBlocks": 0
+}
+```
 
-- `SKILL.md` → the **"Repo hard rules"** section and the **"Composition with other
-  skills"** table.
-- `CHECKLIST.md` → the **"Repo hard rules"** block.
-- References to `@teserra/*`, `@packages/store`, `@packages/logger`, `@packages/i18n`,
-  `modules/*`, `v8/`, and named sibling skills (`teserra-components`,
-  `state-management`, `e2e-expert`, …).
+`phase` decides which gates are live. Outside a tracked run the gates stay silent, so
+ad-hoc sessions behave exactly as they did before. `.tlv/runs/<branch-slug>.evidence.json`
+is the ledger the push gate reads.
 
-Everything under `HK-*`, `EF-*`, `ST-*`, `CP-*`, `CC-*`, `TS-*`, `PF-*`, and most of
-`AD-*` applies to any React codebase.
-
-## Sources
-
-Merged and distilled from:
-
-- [awesome-skills/code-review-skill](https://github.com/awesome-skills/code-review-skill) — severity tiers, 4-phase process, React 19 rules
-- [victor36max/use-effect-killer](https://github.com/victor36max/use-effect-killer) — the effect anti-pattern catalogue
-- [React — You Might Not Need an Effect](https://react.dev/learn/you-might-not-need-an-effect)
-- [React — Reusing Logic with Custom Hooks](https://react.dev/learn/reusing-logic-with-custom-hooks) — the `use`-prefix rule
-- [Google engineering practices — What to look for in a code review](https://google.github.io/eng-practices/review/reviewer/looking-for.html) — the code-health principle and review ordering
-- [Conventional Comments](https://conventionalcomments.org/) — comment format
-- [formidablelabs/eslint-plugin-no-unnecessary-hook-definition](https://github.com/formidablelabs/eslint-plugin-no-unnecessary-hook-definition)
-- [Pagepro](https://pagepro.co/blog/18-tips-for-a-better-react-code-review-ts-js/) and [Kodus](https://kodus.io/en/react-code-review-checklist) React review checklists
+Add `.tlv/` to the target repo's `.gitignore`.

@@ -1,0 +1,64 @@
+{
+  "$schema": "https://code.claude.com/schemas/marketplace.json",
+  "name": "talview",
+  "description": "Talview frontend delivery ecosystem — enforcement gates, ticket-to-PR pipelines, verification, review, and self-learning for Claude Code.",
+  "owner": {
+    "name": "Md Anas",
+    "email": "md.anas@talview.com",
+    "url": "https://github.com/anasmallick35"
+  },
+  "version": "0.1.0",
+  "plugins": [
+    {
+      "name": "talview-core",
+      "displayName": "Talview Core — Enforcement Gates",
+      "source": "./plugins/talview-core",
+      "description": "Deterministic guardrails: edit-time lint feedback, definition-of-done gate, evidence-gated push. The layer that cannot be skipped.",
+      "version": "0.1.0",
+      "category": "quality",
+      "keywords": ["hooks", "lint", "gates", "enforcement"],
+      "license": "MIT"
+    },
+    {
+      "name": "talview-delivery",
+      "displayName": "Talview Delivery — Ticket to PR",
+      "source": "./plugins/talview-delivery",
+      "description": "Intake router plus feature, bug, sentry and tech-debt tracks that carry a ticket from audit through ADR to an open PR.",
+      "version": "0.1.0",
+      "category": "workflow",
+      "keywords": ["linear", "adr", "pipeline", "stacked-pr"],
+      "license": "MIT",
+      "dependencies": ["talview-core"]
+    },
+    {
+      "name": "talview-verify",
+      "displayName": "Talview Verify — Prove It Works",
+      "source": "./plugins/talview-verify",
+      "description": "Browser, network and accessibility verification that produces evidence artifacts, not claims.",
+      "version": "0.1.0",
+      "category": "testing",
+      "keywords": ["playwright", "cypress", "a11y", "verification"],
+      "license": "MIT"
+    },
+    {
+      "name": "talview-review",
+      "displayName": "Talview Review — Code Quality Rules",
+      "source": "./plugins/talview-review",
+      "description": "React/TypeScript code quality rubric, applied both before writing and when reviewing a diff.",
+      "version": "0.1.0",
+      "category": "quality",
+      "keywords": ["react", "review", "code-quality"],
+      "license": "MIT"
+    },
+    {
+      "name": "talview-learn",
+      "displayName": "Talview Learn — Self-Improvement Loop",
+      "source": "./plugins/talview-learn",
+      "description": "Harvests PR review feedback into enforceable rules and routes each lesson to lint, hook, skill or CLAUDE.md.",
+      "version": "0.1.0",
+      "category": "quality",
+      "keywords": ["learning", "feedback", "rules"],
+      "license": "MIT"
+    }
+  ]
+}

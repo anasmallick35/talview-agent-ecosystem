@@ -1,0 +1,18 @@
+{
+  "baseBranch": "develop",
+  "sourceRoots": ["v8", "modules", "teserra", "packages", "embedded", "extensions"],
+  "lint": {
+    "enabled": true,
+    "timeoutSeconds": 30
+  },
+  "dod": {
+    "requireUnitTest": true,
+    "requireStories": true,
+    "requireE2E": true,
+    "requireI18nParity": true,
+    "maxGateBlocks": 4
+  },
+  "push": {
+    "requiredEvidence": ["lint", "typecheck", "test"]
+  }
+}
