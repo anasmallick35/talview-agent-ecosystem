@@ -85,6 +85,26 @@ if command -v claude >/dev/null; then
 fi
 
 # ─────────────────────────────────────────────────────────── credentials
+head "Workspace MCP servers"
+# .claude/settings.local.json is gitignored, so a fresh clone has no MCP servers enabled
+# and playwright/storybook/sentry silently never load.
+if [ -n "$root" ] && [ -f "$root/.mcp.json" ]; then
+  declared="$(jq -r '.mcpServers | keys[]' "$root/.mcp.json" 2>/dev/null | tr '\n' ' ')"
+  local_settings="$root/.claude/settings.local.json"
+  if [ -f "$local_settings" ]; then
+    enabled="$(jq -r '.enabledMcpjsonServers[]?' "$local_settings" 2>/dev/null | tr '\n' ' ')"
+    missing=""
+    for d in $declared; do
+      printf '%s' " $enabled " | grep -q " $d " || missing="$missing $d"
+    done
+    [ -z "$missing" ] && okay "enabled servers" "$enabled" \
+      || y "enabled servers" "not enabled:$missing" "add them to .claude/settings.local.json under enabledMcpjsonServers"
+  else
+    y "settings.local.json" "absent — none of [$declared] are enabled" \
+      "this file is gitignored, so a fresh clone has none. Create it: printf '{\"enabledMcpjsonServers\":[\"playwright\",\"storybook\",\"sentry\"]}' > .claude/settings.local.json"
+  fi
+fi
+
 head "Credentials — browser verification (verify_browser phase)"
 have_auth=0
 for v in TEST_AUTH_USERNAME TEST_AUTH_PASSWORD TEST_AUTH_TENANT_ID; do

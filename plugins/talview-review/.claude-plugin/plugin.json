@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "talview-review",
   "displayName": "Talview Review \u2014 Code Quality Rules",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "React/TypeScript code quality rubric, applied both before writing and when reviewing a diff.",
   "author": {
     "name": "Md Anas",
