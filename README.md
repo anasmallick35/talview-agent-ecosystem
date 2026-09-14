@@ -43,15 +43,26 @@ git clone git@github.com:talview/webclients.git && cd webclients
 nvm use 24 && pnpm install
 gh auth login
 
-# 2. plugins
+# 2. per-machine config the product repo cannot ship for you
+#    .claude/settings.local.json is gitignored, so a fresh clone enables no MCP
+#    servers at all and playwright/storybook/sentry silently never load.
+printf '{"enabledMcpjsonServers":["playwright","storybook","sentry"]}\n' \
+  > .claude/settings.local.json
+cp .env.example .env 2>/dev/null   # then fill in TEST_AUTH_* and SENTRY_ACCESS_TOKEN
+
+# 3. plugins — this repo is public, so no auth is needed here
 claude plugin marketplace add anasmallick35/talview-agent-ecosystem
 for p in talview-core tlv talview-verify talview-review talview-learn; do
   claude plugin install "$p@talview"
 done
 
-# 3. check what is still missing
+# 4. check what is still missing
 ~/.claude/plugins/cache/talview/talview-core/*/scripts/doctor.sh
 ```
+
+Plugins install at **user scope**, so they are live in every project on that machine,
+not only the product repo. That is safe: every gate is scoped to a tracked run and every
+script fails open, so a repo with no pnpm, no eslint or no git sees nothing at all.
 
 `doctor.sh` checks the toolchain, `gh` auth, the workspace's own `.claude/skills`,
 every plugin, the credentials each phase needs, and the services it expects — and prints
@@ -71,6 +82,20 @@ the fix for each gap. It changes nothing.
 Browser verification is headless and mints a token from `@packages/test-utils`; there is
 no interactive login and no OTP. But it still needs those three `TEST_AUTH_*` values, so
 "no username and password" is only true of the *session*, not of the setup.
+
+### This repository is public
+
+That is what lets `claude plugin marketplace add` work on any machine with no auth, and
+it is the right default for something meant to be shared. It also means nothing internal
+can live here.
+
+The one place that matters is `plugins/talview-learn/lessons/`. Harvested review comments
+quote **private product code**. Write each lesson as the rule and its rationale, not the
+snippet it came from. If a lesson cannot be stated without the code, it belongs in the
+product repo's own docs instead.
+
+Making this repository private is the alternative, and it is a real trade: installs then
+need authentication, and sharing it with another team stops being a one-line command.
 
 ## Use it
 
