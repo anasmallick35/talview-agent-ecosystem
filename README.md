@@ -47,9 +47,36 @@ open PR without stopping.
 | --- | --- |
 | `/tlv:start` | classify and route |
 | `/tlv:audit` | reuse, pattern, design and backend scans |
-| `/tlv:feature` | the feature track |
+| `/tlv:feature` | feature track — gate is the ADR |
+| `/tlv:bug` | bug track — gate is the fix approach, reproduce first |
+| `/tlv:sentry` | Sentry track — gate is the verdict: fix, file, snooze or close |
+| `/tlv:tech-debt` | tech-debt track — gate is the approach, prove nothing changed |
 | `/talview-verify:verify-browser` | drive the real UI, capture evidence |
 | `/talview-learn:learn` | review feedback into enforcement |
+
+## Tests
+
+```bash
+./plugins/talview-core/tests/gates.test.sh    # 16 assertions, no model calls, free
+claude plugin validate ./plugins/<name>
+claude plugin eval ./plugins/tlv              # skill routing — costs model calls
+```
+
+Gate behaviour is covered by shell tests rather than `claude plugin eval`, deliberately:
+eval runs start in an empty directory with no git repo, no pnpm and no eslint, where every
+gate correctly does nothing. Model-call evals cannot observe behaviour that only exists
+inside a real repository.
+
+The `evals/` suite under `plugins/tlv` covers what evals *are* good at — whether a skill
+fires on natural phrasing, and whether it stays quiet when it should. It is written to the
+documented format but **not yet verified**: `claude plugin eval` is early-access and
+refused to run on CLI 2.1.227. Run `claude update` first.
+
+## Proposals
+
+`proposals/webclients/` holds changes to the product repo that are **not applied**. That
+repo is shared by the whole frontend team, so each is a deliberate PR raised with its
+owners. Nothing this ecosystem does depends on one landing.
 
 Local development against a checkout:
 

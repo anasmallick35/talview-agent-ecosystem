@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax
+        run: |
+          fail=0
+          while IFS= read -r f; do
+            bash -n "$f" || { echo "syntax error: $f"; fail=1; }
+          done < <(find plugins -name '*.sh')
+          exit $fail
+
+      - name: JSON is parseable
+        run: |
+          fail=0
+          while IFS= read -r f; do
+            jq empty "$f" 2>/dev/null || { echo "invalid json: $f"; fail=1; }
+          done < <(find . -name '*.json' -not -path './.git/*')
+          exit $fail
+
+      # Deterministic gate behaviour. No model calls, no cost.
+      - name: Gate tests
+        run: ./plugins/talview-core/tests/gates.test.sh
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Validate every plugin
+        run: |
+          fail=0
+          for p in plugins/*/; do
+            echo "== $p"
+            claude plugin validate "./$p" || fail=1
+          done
+          exit $fail

@@ -1,0 +1,46 @@
+# PROPOSAL — not applied. See ../../README.md for cost, access and scoping caveats.
+#
+# Starts in mention-only mode: Claude runs when someone writes @claude, not on every
+# push. Uncomment the `pull_request` trigger only after the team has agreed who pays.
+
+name: Claude
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  # pull_request:
+  #   types: [opened, synchronize]
+  #   paths:
+  #     - 'modules/recruit/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  id-token: write
+
+jobs:
+  claude:
+    # Mention-gated. Without this, every comment on the repo starts a paid run.
+    if: |
+      contains(github.event.comment.body, '@claude') ||
+      github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # The repo's own CLAUDE.md and .claude/skills/ are picked up from the checkout,
+          # so review follows the same rules a local session does.
+          prompt: |
+            Review this pull request against CLAUDE.md and the repository's skills.
+            Report only clear, objective issues; do not nitpick style the linter owns.
+            Note any missing unit test, story, Cypress spec, or locale-parity gap for
+            keys this branch adds.
