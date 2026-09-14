@@ -32,6 +32,46 @@ claude plugin marketplace add anasmallick35/talview-agent-ecosystem
 /plugin install talview-learn@talview
 ```
 
+## Setting up a new machine
+
+The marketplace carries the plugins. It does not carry the product repo, your
+credentials, or your toolchain — so installing is three steps, not one.
+
+```bash
+# 1. toolchain + product repo
+git clone git@github.com:talview/webclients.git && cd webclients
+nvm use 24 && pnpm install
+gh auth login
+
+# 2. plugins
+claude plugin marketplace add anasmallick35/talview-agent-ecosystem
+for p in talview-core tlv talview-verify talview-review talview-learn; do
+  claude plugin install "$p@talview"
+done
+
+# 3. check what is still missing
+~/.claude/plugins/cache/talview/talview-core/*/scripts/doctor.sh
+```
+
+`doctor.sh` checks the toolchain, `gh` auth, the workspace's own `.claude/skills`,
+every plugin, the credentials each phase needs, and the services it expects — and prints
+the fix for each gap. It changes nothing.
+
+### What needs credentials, and where they come from
+
+| Needs | For | Where |
+| --- | --- | --- |
+| `gh auth login` | ADR PRs, comment harvesting | per machine |
+| `TEST_AUTH_USERNAME` / `PASSWORD` / `TENANT_ID` | `verify_browser` sign-in | `.env` in the product repo, or AWS Secrets Manager fallback |
+| `SENTRY_ACCESS_TOKEN` | the Sentry track | `.env` in the product repo |
+| Storybook on `:4450` | verifying Teserra props instead of guessing | `pnpm --filter @dx/storybook run serve` |
+| Linear, Figma | intake, design resolution | claude.ai connectors — OAuth **per account**, authorise once, follows you to any machine |
+| Chrome DevTools, Context7 | network evidence, library docs | nothing — `npx`, no credentials |
+
+Browser verification is headless and mints a token from `@packages/test-utils`; there is
+no interactive login and no OTP. But it still needs those three `TEST_AUTH_*` values, so
+"no username and password" is only true of the *session*, not of the setup.
+
 ## Use it
 
 ```

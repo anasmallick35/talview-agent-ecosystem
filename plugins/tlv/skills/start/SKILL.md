@@ -44,9 +44,16 @@ scope drifts.
 ## 3. Start the run
 
 ```bash
+# First run in a workspace, or anything behaving oddly — check the environment.
+"$(dirname "${CLAUDE_PLUGIN_ROOT}")"/../talview-core/*/scripts/doctor.sh
+
 "${CLAUDE_PLUGIN_ROOT}"/scripts/skill-map.sh check          # confirm the workspace resolves
 "${CLAUDE_PLUGIN_ROOT}"/scripts/run.sh start <TICKET> <track>
 ```
+
+If `doctor.sh` reports blocking gaps, fix them before starting — a run that fails at
+`verify_browser` because credentials were never configured has wasted every phase before
+it. Optional gaps are fine to proceed with; name which phases will degrade.
 
 If `skill-map.sh check` reports missing skills, say which phases will degrade to their
 fallback before going further. Do not start a run in a workspace where the map does not
