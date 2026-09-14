@@ -9,6 +9,10 @@
 # which is the whole point: "tests passed" only means something for the code that ran.
 
 set -uo pipefail
+
+# Claude Code sets CLAUDE_PLUGIN_ROOT when a hook runs. Resolve it ourselves when a
+# person runs the script straight from a shell, so both paths work identically.
+: "${CLAUDE_PLUGIN_ROOT:=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 export TLV_INPUT='{}'
 . "${CLAUDE_PLUGIN_ROOT}/scripts/tlv-lib.sh"
 

@@ -10,6 +10,10 @@
 
 set -uo pipefail
 
+# Claude Code sets CLAUDE_PLUGIN_ROOT when a hook runs. Resolve it ourselves when a
+# person runs the script straight from a shell, so both paths work identically.
+: "${CLAUDE_PLUGIN_ROOT:=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+
 root="$(git rev-parse --show-toplevel 2>/dev/null || printf '%s' "$PWD")"
 name="$(basename "$root" | tr -cd '[:alnum:]._-')"
 branch="$(git -C "$root" rev-parse --abbrev-ref HEAD 2>/dev/null)"

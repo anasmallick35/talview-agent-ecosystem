@@ -9,6 +9,10 @@
 # whole point: a phase that quietly does nothing is how work goes missing.
 
 set -uo pipefail
+
+# Claude Code sets CLAUDE_PLUGIN_ROOT when a hook runs. Resolve it ourselves when a
+# person runs the script straight from a shell, so both paths work identically.
+: "${CLAUDE_PLUGIN_ROOT:=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 MAP="${CLAUDE_PLUGIN_ROOT}/config/skill-map.json"
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || printf '%s' "$PWD")"
 WS="$ROOT/$(jq -r '.workspaceRoot // ".claude"' "$MAP")"

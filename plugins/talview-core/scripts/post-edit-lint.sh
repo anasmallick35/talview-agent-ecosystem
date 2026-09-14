@@ -10,6 +10,10 @@
 # Never blocks. Worst case it says nothing.
 
 set -uo pipefail
+
+# Claude Code sets CLAUDE_PLUGIN_ROOT when a hook runs. Resolve it ourselves when a
+# person runs the script straight from a shell, so both paths work identically.
+: "${CLAUDE_PLUGIN_ROOT:=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 . "${CLAUDE_PLUGIN_ROOT}/scripts/tlv-lib.sh"
 
 TLV_INPUT="$(cat)"; export TLV_INPUT

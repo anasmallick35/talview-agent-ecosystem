@@ -6,6 +6,10 @@
 # Requires TLV_INPUT to be exported (hook JSON) or falls back to $PWD.
 
 set -uo pipefail
+
+# Claude Code sets CLAUDE_PLUGIN_ROOT when a hook runs. Resolve it ourselves when a
+# person runs the script straight from a shell, so both paths work identically.
+: "${CLAUDE_PLUGIN_ROOT:=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 . "${CLAUDE_PLUGIN_ROOT}/scripts/tlv-lib.sh"
 tlv_have jq || exit 0
 

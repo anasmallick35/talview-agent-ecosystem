@@ -34,8 +34,24 @@ claude plugin marketplace add anasmallick35/talview-agent-ecosystem
 
 ## Setting up a new machine
 
+One command, if you have this repo checked out:
+
+```bash
+./bootstrap.sh --workspace /path/to/webclients
+```
+
+It is idempotent, registers the marketplace, installs or updates all five plugins, enables
+the workspace's MCP servers, seeds `.env`, and ends with the environment check. It touches
+nothing in the product repo that is not already gitignored.
+
+Pointing Claude at this repository works too — [`SETUP.md`](SETUP.md) is written as
+instructions for an agent to follow.
+
+<details>
+<summary>Or do it by hand</summary>
+
 The marketplace carries the plugins. It does not carry the product repo, your
-credentials, or your toolchain — so installing is three steps, not one.
+credentials, or your toolchain — so by hand it is four steps, not one.
 
 ```bash
 # 1. toolchain + product repo
@@ -64,9 +80,16 @@ Plugins install at **user scope**, so they are live in every project on that mac
 not only the product repo. That is safe: every gate is scoped to a tracked run and every
 script fails open, so a repo with no pnpm, no eslint or no git sees nothing at all.
 
-`doctor.sh` checks the toolchain, `gh` auth, the workspace's own `.claude/skills`,
-every plugin, the credentials each phase needs, and the services it expects — and prints
-the fix for each gap. It changes nothing.
+</details>
+
+`doctor.sh` checks the toolchain, `gh` auth, the workspace's own `.claude/skills`, every
+plugin, which MCP servers are actually enabled, the credentials each phase needs, and the
+services it expects — and prints the fix for each gap. It changes nothing, and you can run
+it at any time:
+
+```bash
+~/.claude/plugins/cache/talview/talview-core/*/scripts/doctor.sh
+```
 
 ### What needs credentials, and where they come from
 
@@ -118,6 +141,80 @@ open PR without stopping.
 | `/tlv:tech-debt` | tech-debt track — gate is the approach, prove nothing changed |
 | `/talview-verify:verify-browser` | drive the real UI, capture evidence |
 | `/talview-learn:learn` | review feedback into enforcement |
+
+## Daily commands
+
+Scripts live inside the installed plugins and work the same from a shell as from a hook.
+Set these once per shell, picking the highest installed version:
+
+```bash
+P=~/.claude/plugins/cache/talview
+CORE=$(ls -d $P/talview-core/*/scripts | sort -V | tail -1)
+TLV=$(ls -d $P/tlv/*/scripts | sort -V | tail -1)
+LEARN=$(ls -d $P/talview-learn/*/scripts | sort -V | tail -1)
+```
+
+Run them from inside the product repo — every one of them reads the current branch.
+
+### Where am I
+
+```bash
+$TLV/run.sh show                  # ticket, track, phase, armed, waivers
+$TLV/run.sh next                  # the phase that follows this one
+$TLV/skill-map.sh check           # do all workspace skills and agents resolve
+$TLV/skill-map.sh phase adr       # what a given phase dispatches to
+$CORE/doctor.sh                   # environment gaps and their fixes
+```
+
+### Driving a run
+
+```bash
+$TLV/run.sh start WFT-1234 feature       # usually done for you by /tlv:start
+$TLV/run.sh phase implement_ui           # gates idle — still building
+$TLV/run.sh phase test_unit              # gates ARM here
+$TLV/run.sh gate adr approved "<PR url>"
+```
+
+`phase` is the control that arms and disarms the gates. Everything from `test_unit`
+onward blocks on missing tests, stories, Cypress specs and locale parity.
+
+### Recording evidence
+
+```bash
+$CORE/evidence.sh record lint      pass 'pnpm exec turbo run lint --filter=...'
+$CORE/evidence.sh record typecheck pass 'pnpm exec turbo run typecheck'
+$CORE/evidence.sh record test      pass 'pnpm --filter @modules/recruit run test'
+$CORE/evidence.sh show
+```
+
+Record `pass` only for a command you ran and watched succeed. The push gate compares each
+timestamp against the newest source edit, so a pass recorded ahead of the work expires the
+moment a file changes and blocks you anyway.
+
+### When a gate blocks you
+
+```bash
+$TLV/run.sh waive stories "layout-only wrappers, no visual states to document"
+```
+
+The reason is mandatory — a waiver without one is just a skip, and the command refuses.
+Prefer doing the work; waive only what genuinely does not apply.
+
+### Learning from review
+
+```bash
+$LEARN/harvest-recent.sh 7                      # sweep PRs merged in the last week
+$LEARN/harvest.sh 17403                         # one PR, with the diff hunks
+$LEARN/harvest.sh 17403 --exclude-self          # external reviewers only
+$LEARN/lesson.sh add <slug> skill-rule <pr-url> # classify by where it can be enforced
+$LEARN/lesson.sh bump <slug>                    # seen again; 3+ flags for promotion
+$LEARN/lesson.sh list
+$LEARN/lesson.sh pending                        # needs a product-repo PR — proposals only
+```
+
+Self-authored comments are included by default and labelled, because the workspace's
+`code-review` skill posts under your own account — filtering by author would discard most
+of the signal on your own PRs.
 
 ## Tests
 

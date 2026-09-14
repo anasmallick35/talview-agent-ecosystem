@@ -4,6 +4,10 @@
 
 set -uo pipefail
 
+# Claude Code sets CLAUDE_PLUGIN_ROOT when a hook runs. Resolve it ourselves when a
+# person runs the script straight from a shell, so both paths work identically.
+: "${CLAUDE_PLUGIN_ROOT:=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+
 TLV_INPUT="${TLV_INPUT:-}"
 
 tlv_have() { command -v "$1" >/dev/null 2>&1; }
