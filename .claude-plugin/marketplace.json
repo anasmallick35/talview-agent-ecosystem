@@ -14,7 +14,7 @@
       "displayName": "Talview Core \u2014 Enforcement Gates",
       "source": "./plugins/talview-core",
       "description": "Deterministic guardrails: edit-time lint feedback, definition-of-done gate, evidence-gated push. The layer that cannot be skipped.",
-      "version": "0.4.0",
+      "version": "0.4.1",
       "category": "quality",
       "keywords": [
         "hooks",
