@@ -124,7 +124,7 @@ fi
 
 head "Credentials — Sentry (sentry track)"
 tok=""
-[ -n "$root" ] && [ -f "$root/.env" ] && tok="$(grep -mE1 '^SENTRY_(ACCESS|AUTH)_TOKEN=' "$root/.env" 2>/dev/null | cut -d= -f2-)"
+[ -n "$root" ] && [ -f "$root/.env" ] && tok="$(grep -m1 -E '^SENTRY_(ACCESS|AUTH)_TOKEN=' "$root/.env" 2>/dev/null | cut -d= -f2-)"
 [ -z "$tok" ] && tok="${SENTRY_ACCESS_TOKEN:-${SENTRY_AUTH_TOKEN:-}}"
 [ -n "$tok" ] && okay "SENTRY token" "present" \
   || y "SENTRY token" "absent" "add SENTRY_ACCESS_TOKEN to .env — the Sentry MCP server will not start without it"
