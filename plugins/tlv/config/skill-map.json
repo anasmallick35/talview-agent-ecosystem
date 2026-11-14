@@ -21,7 +21,7 @@
         "knip"
       ],
       "fallback": "Grep-only reuse scan; record reduced confidence in the ADR.",
-      "$toolNote": "ast-grep evaluated and deferred: it returns zero matches, silently, for any path argument containing [ or ] \u2014 which this repo's route directories use throughout. Revisit if that is fixed upstream."
+      "$toolNote": "ast-grep evaluated and deferred: it returns zero matches, silently, for any path argument containing [ or ] — which this repo's route directories use throughout. Revisit if that is fixed upstream."
     },
     "brainstorm": {
       "workspace": [
@@ -185,6 +185,16 @@
         "talview-learn:learn"
       ],
       "fallback": "Record review feedback verbatim; do not attempt to route it."
+    },
+    "review_round": {
+      "plugin": [
+        "tlv:review-round"
+      ],
+      "workspaceAgents": [
+        "Explore"
+      ],
+      "$note": "Not a linear phase: a round happens each time review lands, and may repeat.",
+      "fallback": "Harvest the PR, triage with the human, fix on the PR's own branch, reply to every thread."
     }
   },
   "tracks": {

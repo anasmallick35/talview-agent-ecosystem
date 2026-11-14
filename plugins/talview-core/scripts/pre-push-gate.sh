@@ -70,10 +70,15 @@ stale=(); absent=(); failed=()
 required="$(tlv_cfg '.push.requiredEvidence')"
 [ -n "$required" ] || required='["lint","typecheck","test"]'
 
+# Portable mtime. The GNU form is tried FIRST on purpose: on Linux `stat -f %m FILE`
+# prints filesystem information to stdout and exits non-zero, so a `-f`-first fallback
+# chain appends the epoch to that text and yields a multi-line value that every numeric
+# comparison then fails, silently. `stat -c` on BSD fails cleanly with no stdout, so this
+# order is the only one that is safe on both.
 newest_src="$( { git diff --name-only --diff-filter=ACMR "$(tlv_merge_base)" 2>/dev/null; \
                  git ls-files --others --exclude-standard 2>/dev/null; } \
   | grep -E '\.(ts|tsx|js|jsx|json)$' \
-  | while IFS= read -r f; do [ -f "$f" ] && { stat -f %m "$f" 2>/dev/null || stat -c %Y "$f" 2>/dev/null; }; done \
+  | while IFS= read -r f; do [ -f "$f" ] && { stat -c %Y "$f" 2>/dev/null || stat -f %m "$f" 2>/dev/null; }; done \
   | sort -rn | head -1)"; newest_src="${newest_src:-0}"
 
 while IFS= read -r chk; do

@@ -174,9 +174,10 @@ echo "stack hold"
 RUN="$(dirname "$CLAUDE_PLUGIN_ROOT")/tlv/scripts/run.sh"
 if [ -f "$RUN" ]; then
   TLVROOT="$(dirname "$(dirname "$RUN")")"
+  TMPL="$TLV_HOME/lessons-under-test"
   # A run already exists on this fixture branch from the armed-gates section, and
   # run.sh correctly refuses a second one — so tolerate it rather than fighting it.
-  rg() { ( cd "$FIX" && CLAUDE_PLUGIN_ROOT="$TLVROOT" "$RUN" "$@" >/dev/null 2>&1 ) || true; }
+  rg() { ( cd "$FIX" && CLAUDE_PLUGIN_ROOT="$TLVROOT" TLV_LESSONS_DIR="$TMPL" "$RUN" "$@" >/dev/null 2>&1 ) || true; }
   rg start T-9 feature; rg stack init 3
   hook stack-gate.sh "{\"cwd\":\"$FIX\",\"tool_input\":{\"command\":\"gh pr create -t x\"}}" >/dev/null
   check "no hold -> next PR allowed"      "$(decision)" "none"
@@ -187,12 +188,49 @@ if [ -f "$RUN" ]; then
   check "hold -> new branch denied"       "$(decision)" "deny"
   hook stack-gate.sh "{\"cwd\":\"$FIX\",\"tool_input\":{\"command\":\"git push\"}}" >/dev/null
   check "hold -> fixing this PR allowed"  "$(decision)" "none"
-  rg stack next
+  # Releasing the hold is where a review round is unambiguously over, so it is where
+  # "did this teach us anything" is asked. Nothing recorded -> refuse, with an explicit
+  # escape hatch rather than a silent pass.
+  rc=0; ( cd "$FIX" && CLAUDE_PLUGIN_ROOT="$TLVROOT" TLV_LESSONS_DIR="$TMPL" "$RUN" stack next >/dev/null 2>&1 ) || rc=$?
+  check "empty round refuses to release"  "$rc" "1"
+  rg stack next --nothing-learned
   hook stack-gate.sh "{\"cwd\":\"$FIX\",\"tool_input\":{\"command\":\"gh pr create -t x\"}}" >/dev/null
   check "released -> next PR allowed"     "$(decision)" "none"
+
+  # ...and a round that did record something releases without the flag.
+  rg stack pushed "https://x/pull/2"
+  mkdir -p "$TMPL" && sleep 1 && printf -- '---\nslug: x\nstatus: draft\n---\n' > "$TMPL/x.md"
+  rc=0; ( cd "$FIX" && CLAUDE_PLUGIN_ROOT="$TLVROOT" TLV_LESSONS_DIR="$TMPL" "$RUN" stack next >/dev/null 2>&1 ) || rc=$?
+  check "round with a lesson releases"    "$rc" "0"
 else
   ok "stack hold (tlv plugin not alongside; skipped)"
 fi
+
+# ------------------------------------------------------------- portable mtime
+# These scripts run on macOS laptops and Linux CI. `stat -f %m FILE` on GNU prints
+# filesystem info to STDOUT and exits non-zero, so a `-f`-first fallback chain appends
+# the epoch to that text and every numeric comparison then fails — silently, which is
+# why it survived until CI. A shim pins the ordering on both platforms.
+echo
+echo "portable mtime"
+SHIM="$(mktemp -d)"; mkdir -p "$SHIM/bin"
+cat > "$SHIM/bin/stat" <<'SH'
+#!/usr/bin/env bash
+# absolute path, not `command stat`: the shim is first on PATH and would re-enter itself
+if [ "$1" = "-c" ]; then /usr/bin/stat -c "$2" "$3" 2>/dev/null || /usr/bin/stat -f "${2/\%Y/%m}" "$3"; exit 0; fi
+if [ "$1" = "-f" ]; then
+  echo "  File: "$3""; echo "    ID: 0 Namelen: 255 Type: ext2/ext3"
+  echo "stat: cannot read file system information for '$2'" >&2; exit 1
+fi
+exit 1
+SH
+chmod +x "$SHIM/bin/stat"; touch "$SHIM/probe"
+MT="$(PATH="$SHIM/bin:$PATH" bash -c "stat -c %Y '$SHIM/probe' 2>/dev/null || stat -f %m '$SHIM/probe' 2>/dev/null || echo 0")"
+if [ "$MT" -gt 0 ] 2>/dev/null; then ok "mtime chain yields one integer under GNU-style stat"; else no "mtime chain yields one integer under GNU-style stat" "got '$MT'"; fi
+if grep -q 'stat -f %m .* || stat -c %Y' "$CLAUDE_PLUGIN_ROOT/scripts/pre-push-gate.sh" "$CLAUDE_PLUGIN_ROOT/scripts/evidence.sh" 2>/dev/null; then
+  no "no -f-first stat chains remain" "a -f-first fallback is back in core"
+else ok "no -f-first stat chains remain"; fi
+rm -rf "$SHIM"
 
 echo
 echo "$pass passed, $fail failed"
