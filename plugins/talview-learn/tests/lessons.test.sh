@@ -80,6 +80,32 @@ check "queueing twice is idempotent" "$("$L" queue count)" "1"
 "$L" queue done "https://example.test/pr/42" >/dev/null
 check "harvested PR leaves the queue" "$("$L" queue count)" "0"
 
+# A devcontainer gives each container its own $HOME, so a ledger under $HOME is private
+# to one container and dies on rebuild. CLAUDE_CONFIG_DIR already points at a mounted
+# volume in that setup, so following it makes the ledger shared and durable — without
+# touching the product repo's devcontainer.json, which the whole team shares.
+echo
+echo "shared ledger across containers"
+VOL="$TMP/volume"; A="$TMP/ctrA"; B="$TMP/ctrB"
+mkdir -p "$VOL" "$A" "$B"
+shared() { env -u TLV_LESSONS_DIR CLAUDE_CONFIG_DIR="$VOL/claude-code" TLV_HOME="$1" "$L" "${@:2}"; }
+check "container A resolves to the volume" "$(shared "$A" path)" "$VOL/claude-code/talview/lessons"
+check "container B resolves to the same"   "$(shared "$B" path)" "$VOL/claude-code/talview/lessons"
+shared "$A" capture cross-container adopted "Captured in container A." >/dev/null
+has "B sees what A captured" "$(shared "$B" drafts)" "cross-container"
+check "no CLAUDE_CONFIG_DIR -> plain HOME" \
+  "$(env -u TLV_LESSONS_DIR -u CLAUDE_CONFIG_DIR TLV_HOME="$A" "$L" path)" "$A/.talview/lessons"
+check "TLV_LESSONS_DIR still wins" \
+  "$(CLAUDE_CONFIG_DIR="$VOL/claude-code" TLV_LESSONS_DIR="$TMP/explicit" "$L" path)" "$TMP/explicit"
+
+# Moving onto a shared volume must carry the history, and must not destroy the original.
+OLD="$TMP/oldhome"; mkdir -p "$OLD/.talview/lessons"
+printf -- '---\nslug: carried-over\ndestination: skill-rule\naction: apply\nstatus: applied\nseen: 2\nsource: pr\n---\n\n## Proposed enforcement\nAlways localize export columns.\n' \
+  > "$OLD/.talview/lessons/carried-over.md"
+VOL2="$TMP/volume2"
+has "history migrates onto the volume" "$(env -u TLV_LESSONS_DIR CLAUDE_CONFIG_DIR="$VOL2/claude-code" TLV_HOME="$OLD" "$L" list)" "carried-over"
+[ -f "$OLD/.talview/lessons/carried-over.md" ] && ok "migration copies, never moves" || no "migration copies, never moves"
+
 echo
 echo "in-session capture"
 "$L" capture argued-x adopted "Export keeps raw enums; a downstream importer parses them." >/dev/null

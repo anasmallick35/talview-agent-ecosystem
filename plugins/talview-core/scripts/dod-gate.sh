@@ -21,13 +21,13 @@ run_file="$(tlv_run_file)" || exit 0
 
 report="$("${CLAUDE_PLUGIN_ROOT}/scripts/dod-check.sh" 2>/dev/null)"
 [ -z "$report" ] && {
-  jq '.gateBlocks = 0' "$run_file" > "$run_file.tmp" 2>/dev/null && mv "$run_file.tmp" "$run_file"
+  jq '.gateBlocks = 0' "$run_file" > "$run_file.tmp.$$" 2>/dev/null && mv "$run_file.tmp.$$" "$run_file"
   exit 0
 }
 
 blocks="$(jq -r '.gateBlocks // 0' "$run_file" 2>/dev/null)"; blocks=$((blocks + 1))
 max="$(tlv_cfg '.dod.maxGateBlocks')"; max="${max:-4}"
-jq --argjson n "$blocks" '.gateBlocks = $n' "$run_file" > "$run_file.tmp" 2>/dev/null && mv "$run_file.tmp" "$run_file"
+jq --argjson n "$blocks" '.gateBlocks = $n' "$run_file" > "$run_file.tmp.$$" 2>/dev/null && mv "$run_file.tmp.$$" "$run_file"
 
 {
   echo "DEFINITION-OF-DONE GATE FAILED (block ${blocks}/${max})."

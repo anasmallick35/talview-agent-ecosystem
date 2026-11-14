@@ -290,6 +290,26 @@ review comment + your reply
    injected into EVERY session on this machine — tracked run or not
 ```
 
+#### Where the ledger lives, and sharing it across containers
+
+```
+1. TLV_LESSONS_DIR                     explicit override, always wins
+2. $CLAUDE_CONFIG_DIR/talview/lessons  when that variable is set
+3. $HOME/.talview/lessons              a plain workstation
+```
+
+Rule 2 is what makes devcontainers work. Each container gets its own `$HOME`, so a
+ledger under it is private to one container and erased by a rebuild. `CLAUDE_CONFIG_DIR`
+is already pointed at a mounted volume in that setup — webclients' devcontainer sets it
+to `/commandhistory/claude-code` — so following it gives every container one shared,
+durable ledger with no change to a devcontainer.json the whole team shares.
+
+An existing `$HOME` ledger is copied across on first use, and the original is left intact.
+
+Temp writes carry `$$`, so two containers on one volume cannot hand each other a
+half-written file. `active-rules.md` is derived: if two write it at once, the loser is
+rebuilt by `lesson.sh rules`.
+
 `eslint-rule` and `claude-md` lessons stop at the ledger on purpose: they change
 webclients, which is shared by the whole team, so they leave as a deliberate PR and never
 as a side effect of a feature run. `lesson.sh pending` is that list.

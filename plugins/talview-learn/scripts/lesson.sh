@@ -24,19 +24,36 @@
 set -uo pipefail
 
 : "${CLAUDE_PLUGIN_ROOT:=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-DIR="${TLV_LESSONS_DIR:-${TLV_HOME:-$HOME}/.talview/lessons}"
+# Where the ledger lives, in order:
+#   1. TLV_LESSONS_DIR            — explicit override, always wins
+#   2. $CLAUDE_CONFIG_DIR/talview/lessons
+#      Claude Code state that must outlive a container already lives under
+#      CLAUDE_CONFIG_DIR; in a devcontainer it is pointed at a mounted volume. Following
+#      it means several containers share one ledger and a rebuild does not erase what was
+#      learned — without a change to the product repo's devcontainer.json, which the
+#      whole team shares.
+#   3. $HOME/.talview/lessons     — a plain workstation
+tlv_lessons_dir() {
+  if [ -n "${TLV_LESSONS_DIR:-}" ]; then printf '%s' "$TLV_LESSONS_DIR"; return; fi
+  if [ -n "${CLAUDE_CONFIG_DIR:-}" ]; then printf '%s/talview/lessons' "$CLAUDE_CONFIG_DIR"; return; fi
+  printf '%s/.talview/lessons' "${TLV_HOME:-$HOME}"
+}
+DIR="$(tlv_lessons_dir)"
 RULES="$DIR/active-rules.md"
 QUEUE="$DIR/harvest-queue.json"
 mkdir -p "$DIR"
 
-# One-time migration from the old in-plugin location, so upgrading does not lose work.
-legacy="${CLAUDE_PLUGIN_ROOT}/lessons"
-if [ -d "$legacy" ] && [ "$legacy" != "$DIR" ]; then
+# One-time migrations, so neither a plugin upgrade nor a move onto a shared volume
+# loses what was learned. Copy, never move: the old location staying intact means a
+# half-finished migration is recoverable.
+for legacy in "${CLAUDE_PLUGIN_ROOT}/lessons" "${TLV_HOME:-$HOME}/.talview/lessons"; do
+  [ -d "$legacy" ] && [ "$legacy" != "$DIR" ] || continue
   for old in "$legacy"/*.md; do
     [ -f "$old" ] || continue
-    [ -f "$DIR/$(basename "$old")" ] || { cp "$old" "$DIR/"; echo "migrated $(basename "$old") out of the plugin cache" >&2; }
+    case "$(basename "$old")" in active-rules.md) continue ;; esac
+    [ -f "$DIR/$(basename "$old")" ] || { cp "$old" "$DIR/"; echo "migrated $(basename "$old") from $legacy" >&2; }
   done
-fi
+done
 
 # The rules file is DERIVED. It is what a session actually reads, so it is regenerated
 # from the ledger rather than hand-edited — a rule that drifts from its lesson is a rule
@@ -217,13 +234,13 @@ case "${1:-list}" in
         url="${3:?pr url}"; repo="${4:-}"
         jq --arg u "$url" --arg r "$repo" \
           'if any(.[]; .url == $u) then . else . + [{url:$u, repo:$r, harvested:false}] end' \
-          "$QUEUE" > "$QUEUE.tmp" && mv "$QUEUE.tmp" "$QUEUE"
+          "$QUEUE" > "$QUEUE.tmp.$$" && mv "$QUEUE.tmp.$$" "$QUEUE"
         echo "queued for harvest once review lands: $url"
         ;;
       done)
         url="${3:?pr url}"
         jq --arg u "$url" 'map(if .url == $u then .harvested = true else . end)' \
-          "$QUEUE" > "$QUEUE.tmp" && mv "$QUEUE.tmp" "$QUEUE"
+          "$QUEUE" > "$QUEUE.tmp.$$" && mv "$QUEUE.tmp.$$" "$QUEUE"
         echo "marked harvested: $url"
         ;;
       list)

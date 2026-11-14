@@ -185,9 +185,16 @@ filed in the wrong destination — reclassify it rather than writing it more fir
 
 ## Where the ledger lives
 
-`~/.talview/lessons/` — outside the plugin, deliberately. The plugin installs into a
-version-pinned cache directory, so a ledger stored inside it is abandoned by the next
-release of this plugin. Override with `TLV_LESSONS_DIR`.
+Resolved in this order:
+
+1. `TLV_LESSONS_DIR` — explicit override
+2. `$CLAUDE_CONFIG_DIR/talview/lessons` — set in devcontainers, where it points at a
+   mounted volume, so every container shares one ledger and a rebuild does not erase it
+3. `$HOME/.talview/lessons` — a plain workstation
+
+Never inside the plugin: it installs into a version-pinned cache directory, so a ledger
+stored there is abandoned by the next release. An older ledger is copied forward on first
+use; the original is left where it was.
 
 This repository is public. Write each lesson as the rule and its rationale, never the
 private snippet it came from. If a lesson cannot be stated without the code, it belongs in
