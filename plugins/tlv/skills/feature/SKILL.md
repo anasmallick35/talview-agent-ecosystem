@@ -227,24 +227,6 @@ The SessionStart hook will name any queued PR still owing a harvest, so the next
 that touches this branch picks it up. Do not close the run by claiming the feedback loop
 ran — it has not run yet, and saying so is the difference between a loop and a ritual.
 
-### concepts
-
-`/tlv:concept`. At most three, drawn from what the run used non-trivially, what review
-flagged, or what cost real time. Not only React and not only frontend — a shell gate, an
-RxDB migration, an ICU rule or a CI failure all count.
-
-Routine work that taught nothing produces nothing. Say that rather than padding: a
-library that fills with filler stops being read.
-
-```bash
-LEARN="$(dirname "${CLAUDE_PLUGIN_ROOT}")/talview-learn/scripts"
-"$LEARN"/journal.sh set "<id>" summary "<what shipped, two lines>"
-"$LEARN"/concept.sh add <slug> --entry "<id>" --tags "..." --title "..."   # body on stdin
-```
-
-The journal entry already exists — `run.sh start` created it. The id is in the run state
-under `journalEntry`.
-
 ## Standing constraints
 
 - The target repo is modified **only** through the work itself. No config changes, no

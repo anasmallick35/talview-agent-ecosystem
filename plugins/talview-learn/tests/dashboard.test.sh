@@ -61,6 +61,34 @@ if command -v node >/dev/null 2>&1; then
     ok "serves a page"
     has "renders the concept"  "$(cat "$TMP/p.html")" "demo-concept"
     has "renders the entry"    "$(cat "$TMP/p.html")" "WFT-1"
+    # The page is rendered entirely by client JS from an embedded JSON block. Grepping
+    # the HTML proves the data is PRESENT, not that the page WORKS — html-escaping that
+    # block once shipped a blank page that every substring assertion still passed.
+    if node -e '
+      const fs=require("fs");const h=fs.readFileSync(process.argv[1],"utf8");
+      const m=h.match(/<script id="data" type="application\/json">([\s\S]*?)<\/script>/);
+      if(!m) { console.error("no data block"); process.exit(1); }
+      const d=JSON.parse(m[1]);
+      if(!Array.isArray(d.concepts)||!Array.isArray(d.journal)) { console.error("bad shape"); process.exit(1); }
+    ' "$TMP/p.html" 2>/dev/null; then ok "embedded JSON actually parses"; else no "embedded JSON actually parses" "JSON.parse would fail in the browser"; fi
+
+    # A multi-line question must not be truncated at the first newline. Assert on the
+    # DERIVED question in the payload, not on the raw page: the full body is embedded
+    # either way, so grepping the HTML passes whether or not the bug is present.
+    printf '## Revise with\nQ: first line of the question\nand its second line.\nRefs: x\n' \
+      | "$C" add multiline-q --tags t --title "Multiline" >/dev/null 2>&1
+    curl -sf -m 2 "http://localhost:$PORT" -o "$TMP/p2.html"
+    Q="$(node -e '
+      const fs=require("fs");const h=fs.readFileSync(process.argv[1],"utf8");
+      const m=h.match(/<script id="data" type="application\/json">([\s\S]*?)<\/script>/);
+      const d=JSON.parse(m[1]);
+      const c=d.concepts.find(x=>x.slug==="multiline-q");
+      process.stdout.write(c ? c.question : "");
+    ' "$TMP/p2.html" 2>/dev/null)"
+    has "multi-line question is kept whole" "$Q" "and its second line"
+    has "question joins onto one line"      "$Q" "first line of the question and"
+    printf '%s' "$Q" | grep -q "Refs:" && no "question stops before Refs" "Refs leaked in" || ok "question stops before Refs"
+
     R="$(curl -sf -X POST "http://localhost:$PORT/api/review" -H 'content-type: application/json' -d '{"slug":"demo-concept","result":"known"}')"
     has "review endpoint responds" "$R" '"ok":true'
     has "review WRITES BACK to the ledger — not browser state" \

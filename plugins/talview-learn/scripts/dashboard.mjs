@@ -57,8 +57,23 @@ const loadConcepts = () => ls(DIRS.concepts).filter(f => f.endsWith('.md')).map(
     seen: Number(fm.seen || 1), stage, reviews: Number(fm.reviews || 0), shaky: Number(fm.shaky || 0),
     first: fm.first || '', last: fm.last || '', lastReview: fm.lastReview || 'never',
     entries: (fm.entries || '').split(',').map(s => s.trim()).filter(Boolean), due, body,
+    question: questionOf(body),
   };
 });
+
+// A question wraps across lines in the source. `.` stops at the first newline, so a
+// single-line capture truncates it mid-sentence. Read to a blank line, a Refs: line or
+// the end. Derived HERE rather than in the browser so a test can assert on the value
+// without rendering a page — the bug that shipped was invisible to every grep-the-HTML
+// check, because the full body is embedded either way.
+function questionOf(body) {
+  // No /m flag: with it, `$` matches end of LINE, so the lazy match satisfied the
+  // lookahead at the first newline and every question was truncated to one line.
+  // Anchor the start with (?:^|\n) instead and let `$` mean end of string.
+  const m = String(body).match(/(?:^|\n)Q:\s*([\s\S]*?)(?=\n\s*\n|\nRefs:|$)/);
+  return (m ? m[1] : 'What is the core mechanism here, and when does it bite?')
+    .replace(/\s*\n\s*/g, ' ').trim();
+}
 
 const loadJournal = () => ls(DIRS.journal).filter(f => f.endsWith('.json'))
   .map(f => { try { return JSON.parse(read(join(DIRS.journal, f))); } catch { return null; } })
@@ -118,7 +133,12 @@ function md(src) {
 
 function page() {
   const concepts = loadConcepts(), journal = loadJournal(), lessons = loadLessons();
-  const data = esc(JSON.stringify({ concepts, journal, lessons, today: today() }));
+  // NOT html-escaped. Entities are not decoded inside <script>, whose content is raw
+  // text, so `&quot;` would reach JSON.parse literally and fail at position 1 — a blank
+  // page with one console error. Escaping `<` as \u003c is valid JSON, cannot form
+  // `</script>`, and needs no decoding. U+2028/9 are legal in JSON but not in JS strings.
+  const data = JSON.stringify({ concepts, journal, lessons, today: today() })
+    .replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Learning dashboard</title>
@@ -172,7 +192,7 @@ function revision(){
   if(!due.length){view.append($('<div class="card"><p class="muted">Nothing due. The ladder is clear — come back when a concept comes round again.</p></div>').firstChild);return}
   view.append($('<p class="muted">Answer before you reveal. Honest "shaky" is what makes the schedule work — it resets the interval to one day.</p>').firstChild);
   for(const c of due){
-    const qm=(c.body.match(/^Q:\\s*(.*)$/m)||[])[1]||'What is the core mechanism here, and when does it bite?';
+    const qm=c.question;
     const el=$('<div class="card"><div class="row"><strong>'+esc(c.title)+'</strong>'+
       c.tags.map(t=>'<span class="tag">'+esc(t)+'</span>').join('')+
       '<span class="tag">seen '+c.seen+'</span><span class="pill due">stage '+c.stage+'</span></div>'+
