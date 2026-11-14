@@ -20,12 +20,38 @@ TLV_INPUT="$(cat)"; export TLV_INPUT
 tlv_have jq || exit 0
 
 cmd="$(tlv_field '.tool_input.command')"
-printf '%s' "$cmd" | grep -qE '(^|[;&|[:space:]])git[[:space:]]+push([[:space:]]|$)' || exit 0
+# `git push`, but also `git -C <dir> push` and `git --git-dir=... push`: global options
+# sit between the binary and the subcommand, and a gate that only matches the bare form
+# is a gate with a documented way around it.
+printf '%s' "$cmd" \
+  | grep -qE '(^|[;&|[:space:]])git([[:space:]]+(-[cC][[:space:]]*[^[:space:]]+|--[a-z-]+(=[^[:space:]]+)?|-[a-zA-Z]))*[[:space:]]+push([[:space:]]|$)' \
+  || exit 0
 # `gh stack submit` owns its own push path; let the stack tooling through.
 printf '%s' "$cmd" | grep -q 'gh stack' && exit 0
 
-root="$(tlv_repo_root)"; cd "$root" || exit 0
-branch="$(tlv_branch)"
+# A command may push a DIFFERENT repository to the one the session is rooted in —
+# `cd ../other-repo && git push` is ordinary. Honour a leading `cd` so the gate judges
+# the branch it is actually about to push. Without this the gate reads the session's
+# branch and refuses a push it was never asked about, which trains people to ignore it.
+# grep -oE, not sed: BSD sed has no \b, so a word-boundary pattern silently never
+# matches on macOS and the gate quietly judges the wrong repository.
+target_dir=""
+cd_arg="$(printf '%s' "$cmd" \
+  | grep -oE '(^|[;&|[:space:]])cd[[:space:]]+[^;&|]+' \
+  | tail -1 \
+  | sed -e 's/^[^c]*cd[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//; s/"$//' -e "s/^'//; s/'$//")"
+case "$cd_arg" in
+  "~"|"~/"*) cd_arg="$HOME${cd_arg#\~}" ;;
+esac
+[ -n "$cd_arg" ] && [ -d "$cd_arg" ] && target_dir="$cd_arg"
+
+root="$(tlv_repo_root)"
+if [ -n "$target_dir" ]; then
+  alt="$(git -C "$target_dir" rev-parse --show-toplevel 2>/dev/null)"
+  [ -n "$alt" ] && root="$alt"
+fi
+cd "$root" || exit 0
+branch="$(git -C "$root" rev-parse --abbrev-ref HEAD 2>/dev/null)"
 
 case "$branch" in
   develop|main|master)
