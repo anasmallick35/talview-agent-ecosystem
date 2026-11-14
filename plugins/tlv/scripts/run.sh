@@ -105,6 +105,11 @@ case "${1:-show}" in
         # a round that taught something nobody wrote down — the argument happened in a
         # chat window and left with it. The hold release is the one moment the round is
         # unambiguously over, so it is where the question gets asked.
+# Portable mtime. The GNU form is tried FIRST on purpose: on Linux `stat -f %m FILE`
+# prints filesystem information to stdout and exits non-zero, so a `-f`-first fallback
+# chain appends the epoch to that text and yields a multi-line value that every numeric
+# comparison then fails, silently. `stat -c` on BSD fails cleanly with no stdout, so this
+# order is the only one that is safe on both.
         if [ "${3:-}" != "--nothing-learned" ]; then
           held="$(jq -r '.stack.holdAt // 0' "$f")"
           lessons="${TLV_LESSONS_DIR:-${TLV_HOME:-$HOME}/.talview/lessons}"
@@ -113,7 +118,7 @@ case "${1:-show}" in
             for l in "$lessons"/*.md; do
               [ -f "$l" ] || continue
               case "$(basename "$l")" in active-rules.md) continue ;; esac
-              m="$(stat -f %m "$l" 2>/dev/null || stat -c %Y "$l" 2>/dev/null || echo 0)"
+              m="$(stat -c %Y "$l" 2>/dev/null || stat -f %m "$l" 2>/dev/null || echo 0)"
               [ "$m" -ge "$held" ] 2>/dev/null && { fresh=$((fresh+1)); }
             done
           fi

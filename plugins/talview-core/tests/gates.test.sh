@@ -206,6 +206,32 @@ else
   ok "stack hold (tlv plugin not alongside; skipped)"
 fi
 
+# ------------------------------------------------------------- portable mtime
+# These scripts run on macOS laptops and Linux CI. `stat -f %m FILE` on GNU prints
+# filesystem info to STDOUT and exits non-zero, so a `-f`-first fallback chain appends
+# the epoch to that text and every numeric comparison then fails — silently, which is
+# why it survived until CI. A shim pins the ordering on both platforms.
+echo
+echo "portable mtime"
+SHIM="$(mktemp -d)"; mkdir -p "$SHIM/bin"
+cat > "$SHIM/bin/stat" <<'SH'
+#!/usr/bin/env bash
+# absolute path, not `command stat`: the shim is first on PATH and would re-enter itself
+if [ "$1" = "-c" ]; then /usr/bin/stat -c "$2" "$3" 2>/dev/null || /usr/bin/stat -f "${2/\%Y/%m}" "$3"; exit 0; fi
+if [ "$1" = "-f" ]; then
+  echo "  File: "$3""; echo "    ID: 0 Namelen: 255 Type: ext2/ext3"
+  echo "stat: cannot read file system information for '$2'" >&2; exit 1
+fi
+exit 1
+SH
+chmod +x "$SHIM/bin/stat"; touch "$SHIM/probe"
+MT="$(PATH="$SHIM/bin:$PATH" bash -c "stat -c %Y '$SHIM/probe' 2>/dev/null || stat -f %m '$SHIM/probe' 2>/dev/null || echo 0")"
+if [ "$MT" -gt 0 ] 2>/dev/null; then ok "mtime chain yields one integer under GNU-style stat"; else no "mtime chain yields one integer under GNU-style stat" "got '$MT'"; fi
+if grep -q 'stat -f %m .* || stat -c %Y' "$CLAUDE_PLUGIN_ROOT/scripts/pre-push-gate.sh" "$CLAUDE_PLUGIN_ROOT/scripts/evidence.sh" 2>/dev/null; then
+  no "no -f-first stat chains remain" "a -f-first fallback is back in core"
+else ok "no -f-first stat chains remain"; fi
+rm -rf "$SHIM"
+
 echo
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]
