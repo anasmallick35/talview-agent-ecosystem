@@ -31,6 +31,19 @@ jobs:
       - name: Gate tests
         run: ./plugins/talview-core/tests/gates.test.sh
 
+      # The learning loop: ledger outside the plugin, applied -> active, injected.
+      - name: Lesson ledger tests
+        run: ./plugins/talview-learn/tests/lessons.test.sh
+
+      # Every skill a phase dispatches to must exist — workspace AND plugin side.
+      # Catches a renamed or mistyped plugin skill, which `check` used to echo blindly.
+      - name: Plugin skill references resolve
+        run: |
+          out="$(CLAUDE_PLUGIN_ROOT=plugins/tlv plugins/tlv/scripts/skill-map.sh check)"
+          echo "$out"
+          echo "$out" | grep -q 'missing plugin skill' && exit 1
+          exit 0
+
       - name: Install Claude Code
         run: npm install -g @anthropic-ai/claude-code
 

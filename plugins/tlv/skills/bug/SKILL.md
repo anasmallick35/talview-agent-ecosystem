@@ -84,7 +84,11 @@ Then watch the regression test pass, and watch the rest of the suite still pass.
 
 `verify_browser` reproduces the original steps and shows the bug is gone — the same
 steps, not an approximation of them. Then `code-review` (Trigger B), evidence recorded
-via `evidence.sh`, `gh stack submit`, and `/tlv:learn`.
+via `evidence.sh`, `gh stack submit`, and `/talview-learn:learn`.
+
+The code PR has no review yet. Queue it so the feedback is not lost when it lands —
+`"$(dirname "${CLAUDE_PLUGIN_ROOT}")/talview-learn/scripts/lesson.sh" queue add "<pr url>"` —
+and harvest the ADR or fix-approach PR now, where comments already exist.
 
 Gates arm from `test_unit`. A bug fix with no test will not pass the Stop gate, which is
 the intended outcome.

@@ -57,7 +57,7 @@ or why you disagree — a comment silently ignored is the failure mode this gate
 prevent. Iterate until the PR is approved or merged. **Approval is the signal.** Record
 it: `run.sh gate adr approved "<PR url>"`.
 
-Every comment on this PR is also training data — hand them to `/tlv:learn` at the end
+Every comment on this PR is also training data — hand them to `/talview-learn:learn` at the end
 of the run.
 
 ### plan
@@ -87,7 +87,7 @@ waive it with a reason — `run.sh waive <key> "<reason>"` — and expect the re
 read.
 
 ### verify_browser
-`/tlv:verify-browser`. Drive the real UI and produce evidence, not assurances.
+`/talview-verify:verify-browser`. Drive the real UI and produce evidence, not assurances.
 
 ### self_review
 `code-review` (Trigger B, local pre-PR) plus `react-code-quality`. Then
@@ -114,7 +114,23 @@ per-push confirmation, which is why it is strict.
 Never `gh pr merge`. Merging is a human action.
 
 ### learn
-`/tlv:learn` over the ADR PR comments and the code PR comments.
+
+Two things happen here, and only one of them is harvesting.
+
+**Harvest the ADR PR now.** Its gate waited for review, so its threads — including
+anything you pushed back on — exist and are fresh. `/talview-learn:learn` over it.
+
+**Queue the code PRs.** They are minutes old and have no review yet; harvesting them now
+would learn nothing. Record them so the review is not lost when it arrives:
+
+```bash
+LESSON="$(dirname "${CLAUDE_PLUGIN_ROOT}")/talview-learn/scripts/lesson.sh"
+"$LESSON" queue add "<pr url>"
+```
+
+The SessionStart hook will name any queued PR still owing a harvest, so the next session
+that touches this branch picks it up. Do not close the run by claiming the feedback loop
+ran — it has not run yet, and saying so is the difference between a loop and a ritual.
 
 ## Standing constraints
 

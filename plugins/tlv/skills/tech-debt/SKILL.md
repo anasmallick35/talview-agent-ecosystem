@@ -87,7 +87,11 @@ reviewers cannot see.
 
 ## 7. ship → learn
 
-`gh stack submit`, then `/tlv:learn`.
+`gh stack submit`, then `/talview-learn:learn`.
+
+The code PR has no review yet. Queue it so the feedback is not lost when it lands —
+`"$(dirname "${CLAUDE_PLUGIN_ROOT}")/talview-learn/scripts/lesson.sh" queue add "<pr url>"` —
+and harvest the ADR or fix-approach PR now, where comments already exist.
 
 ## Anti-patterns
 

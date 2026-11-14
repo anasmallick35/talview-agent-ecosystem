@@ -61,7 +61,46 @@ echo "protected branches"
 git -C "$FIX" checkout -q develop
 hook pre-push-gate.sh "{\"cwd\":\"$FIX\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"git push origin develop\"}}" >/dev/null
 check "push to develop denied"         "$(decision)" "deny"
+
+# A gate with a known way around it is decoration. Global options sit between the
+# binary and the subcommand, and `git -C <dir> push` used to slip past the matcher.
+hook pre-push-gate.sh "{\"cwd\":\"$FIX\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"git -C $FIX push origin develop\"}}" >/dev/null
+check "git -C ... push still caught"   "$(decision)" "deny"
+hook pre-push-gate.sh "{\"cwd\":\"$FIX\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"git --no-pager push origin develop\"}}" >/dev/null
+check "git --opt push still caught"    "$(decision)" "deny"
 git -C "$FIX" checkout -q feat/demo
+
+# ------------------------------------------------------------------- cross-repo push
+# Pushing repo B from a session rooted in repo A is ordinary. The gate must judge the
+# branch it is actually about to push, not the session's — denying a push it was never
+# asked about is how people learn to ignore a gate.
+echo
+echo "cross-repo push"
+OTHER="$(mktemp -d)/other"; mkdir -p "$OTHER"
+git init -q -b develop "$OTHER"
+git -C "$OTHER" config user.email t@t; git -C "$OTHER" config user.name t
+echo x > "$OTHER/f.txt"; git -C "$OTHER" add -A; git -C "$OTHER" commit -qm base
+git -C "$OTHER" checkout -qb feat/elsewhere
+git -C "$FIX" checkout -q develop
+hook pre-push-gate.sh "{\"cwd\":\"$FIX\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"cd $OTHER && git push -u origin feat/elsewhere\"}}" >/dev/null
+check "judges the cd'd repo, not the session" "$(decision)" "none"
+git -C "$OTHER" checkout -q develop
+hook pre-push-gate.sh "{\"cwd\":\"$FIX\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"cd $OTHER && git push origin develop\"}}" >/dev/null
+check "protected branch in the cd'd repo denied" "$(decision)" "deny"
+
+# Half a fix is worse than none: if the branch check follows the cd'd repo but the
+# evidence ledger does not, the gate reads another workspace's proof. The ledger for
+# the target repo lives under its own name in the state dir.
+git -C "$OTHER" checkout -q feat/elsewhere
+mkdir -p "$TLV_HOME/.talview/other/runs"
+echo '{"ticket":"X-1","track":"feature","phase":"ship","armed":true,"waivers":{},"gateBlocks":0}' \
+  > "$TLV_HOME/.talview/other/runs/feat-elsewhere.json"
+hook pre-push-gate.sh "{\"cwd\":\"$FIX\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"cd $OTHER && git push -u origin feat/elsewhere\"}}" >/dev/null
+check "tracked target repo is denied on no evidence" "$(decision)" "deny"
+printf '%s' "$HOOK_OUT" | jq -r '.hookSpecificOutput.permissionDecisionReason' | grep -q 'Never run on this branch' \
+  && ok "reads the TARGET repo's ledger" || no "reads the TARGET repo's ledger"
+git -C "$FIX" checkout -q feat/demo
+rm -rf "$OTHER"
 
 # ---------------------------------------------------------------- non-push bash
 echo

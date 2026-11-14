@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "talview-verify",
   "displayName": "Talview Verify \u2014 Prove It Works",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Browser, network and accessibility verification that produces evidence artifacts, not claims.",
   "author": {
     "name": "Md Anas",

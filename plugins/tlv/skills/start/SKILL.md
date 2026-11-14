@@ -81,3 +81,10 @@ track skill:
   agent bookkeeping into the product repository.
 - `CLAUDE.md` in the target repo outranks anything in this plugin. Where they conflict,
   follow CLAUDE.md and record the conflict in the ADR.
+- Rules learned from review on earlier runs are injected by the SessionStart hook, under
+  "Rules learned from review". They are not suggestions and they are not stale: each one
+  was written because a reviewer caught it. Honour them for the whole run, and if this
+  run contradicts one, say so explicitly rather than quietly ignoring it — that
+  contradiction is itself a lesson for `/talview-learn:learn`.
+- If that hook reports PRs still owing a harvest, say so at intake. An unharvested PR is
+  feedback already paid for and not yet collected.

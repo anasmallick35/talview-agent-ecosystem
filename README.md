@@ -112,8 +112,9 @@ That is what lets `claude plugin marketplace add` work on any machine with no au
 it is the right default for something meant to be shared. It also means nothing internal
 can live here.
 
-The one place that matters is `plugins/talview-learn/lessons/`. Harvested review comments
-quote **private product code**. Write each lesson as the rule and its rationale, not the
+The one place that matters is the lesson ledger. It lives at `~/.talview/lessons/`, which
+is outside this repository and never committed — but lessons are written to be shared, and
+harvested review comments quote **private product code**. Write each lesson as the rule and its rationale, not the
 snippet it came from. If a lesson cannot be stated without the code, it belongs in the
 product repo's own docs instead.
 
@@ -141,6 +142,11 @@ open PR without stopping.
 | `/tlv:tech-debt` | tech-debt track — gate is the approach, prove nothing changed |
 | `/talview-verify:verify-browser` | drive the real UI, capture evidence |
 | `/talview-learn:learn` | review feedback into enforcement |
+
+`learn` is the one phase that cannot complete inside the run that triggers it: at `ship`
+the code PR is minutes old and has no review. So the track harvests the ADR PR (whose
+gate waited for review) and **queues** the code PR. The queue is surfaced at SessionStart
+and swept weekly — see [Learning from review](#learning-from-review).
 
 ## Daily commands
 
@@ -204,22 +210,69 @@ Prefer doing the work; waive only what genuinely does not apply.
 
 ```bash
 $LEARN/harvest-recent.sh 7                      # sweep PRs merged in the last week
-$LEARN/harvest.sh 17403                         # one PR, with the diff hunks
+$LEARN/harvest.sh 17403                         # one PR: threads, replies, resolved state
 $LEARN/harvest.sh 17403 --exclude-self          # external reviewers only
 $LEARN/lesson.sh add <slug> skill-rule <pr-url> # classify by where it can be enforced
+$LEARN/lesson.sh applied <slug> "<where>"       # the rule now exists -> becomes active
 $LEARN/lesson.sh bump <slug>                    # seen again; 3+ flags for promotion
-$LEARN/lesson.sh list
-$LEARN/lesson.sh pending                        # needs a product-repo PR — proposals only
+$LEARN/lesson.sh list | pending | rules
+$LEARN/lesson.sh queue list                     # PRs raised by a run, review not harvested
 ```
 
 Self-authored comments are included by default and labelled, because the workspace's
 `code-review` skill posts under your own account — filtering by author would discard most
-of the signal on your own PRs.
+of the signal on your own PRs. That matters more than it sounds: **your pushback on a
+thread is the highest-signal line in the harvest**, because it is the only place the
+codebase's real convention gets stated out loud. Threads carry their resolution state, so
+"I argued and the thread closed my way" is distinguishable from "I argued and then caved".
+
+#### Making the second moment automatic
+
+Review lands days after the run ends, so harvesting cannot be something you remember.
+Two mechanisms cover it, and neither needs a command:
+
+- **SessionStart** names any queued PR still owing a harvest, in every session on the
+  machine. You see it exactly when you sit down to act on the comments.
+- **A weekly sweep.** Run once, from inside the product repo:
+
+  ```
+  /schedule weekly on Monday 09:00 — run /talview-learn:learn over the PRs that
+  harvest-recent.sh 7 reports, then show me lesson.sh pending
+  ```
+
+  This needs no workflow in webclients: `harvest-recent.sh` reads the same data from a
+  local `gh` session, so nothing is added to a repo the whole team shares.
+
+#### How a lesson reaches the next run
+
+The ledger is not a memory the agent reads; it is a router. A lesson only changes
+behaviour once it reaches a destination that acts:
+
+```
+review comment + your reply
+        │
+        ▼  lesson.sh add
+   ~/.talview/lessons/<slug>.md          the ledger — outside the plugin, so a plugin
+        │                                upgrade cannot abandon it
+        ▼  lesson.sh applied
+   ~/.talview/lessons/active-rules.md    generated, never hand-edited
+        │
+        ▼  SessionStart hook
+   injected into EVERY session on this machine — tracked run or not
+```
+
+`eslint-rule` and `claude-md` lessons stop at the ledger on purpose: they change
+webclients, which is shared by the whole team, so they leave as a deliberate PR and never
+as a side effect of a feature run. `lesson.sh pending` is that list.
+
+Nothing is injected while a lesson is `open`. `applied` is the switch.
 
 ## Tests
 
 ```bash
 ./plugins/talview-core/tests/gates.test.sh    # 16 assertions, no model calls, free
+./plugins/talview-learn/tests/lessons.test.sh # 19 assertions — the learning loop
+$TLV/skill-map.sh check                       # every phase reference resolves
 claude plugin validate ./plugins/<name>
 claude plugin eval ./plugins/tlv              # skill routing — costs model calls
 ```
