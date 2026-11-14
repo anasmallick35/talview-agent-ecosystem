@@ -239,6 +239,16 @@ ledger did not move usually means the argument is still only in a chat window. S
 `phase` is the control that arms and disarms the gates. Everything from `test_unit`
 onward blocks on missing tests, stories, Cypress specs and locale parity.
 
+### Committing
+
+A commit that fails, or runs past ~30 seconds, goes back to you: the agent prints the
+message and the hook output and stops. It does not retry, reduce scope, or use
+`--no-verify`, and it never follows a failed commit with a push.
+
+The hooks here are slow and sometimes fail on problems that predate the change. Fixing
+them, splitting the commit or committing by hand is your call — and only makes sense with
+the message and the failure in front of you.
+
 ### Recording evidence
 
 ```bash
