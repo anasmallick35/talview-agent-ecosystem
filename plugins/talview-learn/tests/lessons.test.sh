@@ -96,6 +96,23 @@ check "re-capture bumps instead of duplicating" "$(grep -m1 '^seen:' "$TLV_LESSO
 check "invalid outcome refused" "$?" "64"
 
 echo
+echo "a captured lesson injects its own text"
+sed -i '' 's/^destination: unclassified/destination: skill-rule/; s/^status: draft/status: open/' "$TLV_LESSONS_DIR/argued-x.md" 2>/dev/null \
+  || sed -i 's/^destination: unclassified/destination: skill-rule/; s/^status: draft/status: open/' "$TLV_LESSONS_DIR/argued-x.md"
+"$L" applied argued-x "reference/i18n.md" >/dev/null
+has "capture text becomes the rule" "$(cat "$TLV_LESSONS_DIR/active-rules.md")" "Export keeps raw enums"
+
+echo
+echo "applied refuses what it cannot inject"
+"$L" capture argued-z open "something not yet classified" >/dev/null
+rc=0; "$L" applied argued-z "somewhere" >/dev/null 2>&1 || rc=$?
+check "unclassified draft refused"      "$rc" "65"
+rc=0; "$L" applied rule-two "somewhere" >/dev/null 2>&1 || rc=$?
+check "propose-only destination refused" "$rc" "65"
+"$L" rules >/dev/null
+hasnt "neither leaked into the rules" "$(cat "$TLV_LESSONS_DIR/active-rules.md")" "argued-z"
+
+echo
 echo "SessionStart injection"
 mkdir -p "$FIX" && cd "$FIX"
 git init -q -b develop . && git config user.email t@t && git config user.name t

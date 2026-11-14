@@ -8,7 +8,9 @@
 #   run.sh adr <pr|thread|skip>        how this run records its decision (asked, not assumed)
 #   run.sh stack init <count>          the stack is planned; <count> PRs agreed
 #   run.sh stack pushed <pr-url>       current PR is up -> HOLD, the human reviews it
-#   run.sh stack next                  the human said go; release the hold
+#   run.sh stack next [--nothing-learned]
+#                                      the human said go; release the hold. Refuses while
+#                                      the round has taught nothing, unless you say so.
 #   run.sh stack show
 #   run.sh show                        current state
 #   run.sh next                        the phase that follows the current one
@@ -74,7 +76,9 @@ case "${1:-show}" in
     case "$m" in pr|thread|skip) ;; *) die "adr mode must be pr, thread or skip" ;; esac
     jq --arg m "$m" '.adrMode = $m' "$f" > "$f.tmp" && save
     echo "adr mode: $m"
-    [ "$m" = "skip" ] && echo "  the adr phase will be skipped; the decision still has to be stated somewhere — say it in the thread."
+    if [ "$m" = "skip" ]; then
+      echo "  the adr phase will be skipped; the decision still has to be stated somewhere — say it in the thread."
+    fi
     ;;
 
   # A stack is a sequence of PRs a human reviews one at a time. The hold between them
@@ -90,16 +94,57 @@ case "${1:-show}" in
         ;;
       pushed)
         url="${3:?pr url}"
-        jq --arg u "$url" '.stack.prs += [{n:(.stack.current // 1), url:$u}] | .stack.awaiting = true' "$f" > "$f.tmp" && save
+        jq --arg u "$url" --argjson t "$(date +%s)" \
+          '.stack.prs += [{n:(.stack.current // 1), url:$u}] | .stack.awaiting = true | .stack.holdAt = $t' "$f" > "$f.tmp" && save
         echo "PR $(jq -r '.stack.current // 1' "$f")/$(jq -r '.stack.total // "?"' "$f") is up: $url"
         echo "HOLD — the next PR is gated until you say go (run.sh stack next)."
         ;;
       next)
         [ "$(jq -r '.stack.awaiting // false' "$f")" = "true" ] || echo "note: no hold was set" >&2
-        jq '.stack.current = ((.stack.current // 1) + 1) | .stack.awaiting = false' "$f" > "$f.tmp" && save
+        # A review round that taught nothing is possible but uncommon. Far more common is
+        # a round that taught something nobody wrote down — the argument happened in a
+        # chat window and left with it. The hold release is the one moment the round is
+        # unambiguously over, so it is where the question gets asked.
+# Portable mtime. The GNU form is tried FIRST on purpose: on Linux `stat -f %m FILE`
+# prints filesystem information to stdout and exits non-zero, so a `-f`-first fallback
+# chain appends the epoch to that text and yields a multi-line value that every numeric
+# comparison then fails, silently. `stat -c` on BSD fails cleanly with no stdout, so this
+# order is the only one that is safe on both.
+        if [ "${3:-}" != "--nothing-learned" ]; then
+          held="$(jq -r '.stack.holdAt // 0' "$f")"
+          lessons="${TLV_LESSONS_DIR:-${TLV_HOME:-$HOME}/.talview/lessons}"
+          fresh=0
+          if [ "$held" -gt 0 ] 2>/dev/null && [ -d "$lessons" ]; then
+            for l in "$lessons"/*.md; do
+              [ -f "$l" ] || continue
+              case "$(basename "$l")" in active-rules.md) continue ;; esac
+              m="$(stat -c %Y "$l" 2>/dev/null || stat -f %m "$l" 2>/dev/null || echo 0)"
+              [ "$m" -ge "$held" ] 2>/dev/null && { fresh=$((fresh+1)); }
+            done
+          fi
+          [ "$fresh" -eq 0 ] && die "This round recorded nothing.
+
+Review happened and the ledger did not move. If something was argued — on the PR or in
+the session — capture it before the context is gone:
+
+  lesson.sh capture <slug> <adopted|rejected> \"<what was argued, one line>\"
+  lesson.sh add <slug> <destination> <pr-url>   # for a reviewer's comment
+
+If the round genuinely taught nothing — a typo fix, a rename — say so explicitly:
+
+  run.sh stack next --nothing-learned"
+        fi
+        jq --arg nl "${3:-}" \
+          '.stack.current = ((.stack.current // 1) + 1)
+           | .stack.awaiting = false
+           | if $nl == "--nothing-learned"
+             then .stack.nothingLearned = ((.stack.nothingLearned // []) + [(.stack.current - 1)])
+             else . end' "$f" > "$f.tmp" && save
         c="$(jq -r '.stack.current' "$f")"; t="$(jq -r '.stack.total // "?"' "$f")"
         echo "released -> PR $c/$t"
-        [ "$t" != "?" ] && [ "$c" -gt "$t" ] 2>/dev/null && echo "  that was the last planned PR."
+        if [ "$t" != "?" ] && [ "$c" -gt "$t" ] 2>/dev/null; then
+          echo "  that was the last planned PR."
+        fi
         ;;
       show) jq -r '.stack // "no stack planned"' "$f" ;;
       *) die "usage: run.sh stack init|pushed|next|show" ;;

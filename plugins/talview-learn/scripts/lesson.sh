@@ -41,6 +41,16 @@ fi
 # The rules file is DERIVED. It is what a session actually reads, so it is regenerated
 # from the ledger rather than hand-edited — a rule that drifts from its lesson is a rule
 # with no evidence behind it.
+# A lesson written by `add` states its rule under "Proposed enforcement"; one written by
+# `capture` states it under "What was argued". Reading only the first produced an empty
+# bullet — a rule that injects nothing while looking like it worked.
+rule_text() {
+  local f="$1" t
+  t="$(awk '/^## Proposed enforcement/{f=1;next} /^## /{f=0} f && NF' "$f" | head -2 | tr '\n' ' ')"
+  [ -n "${t// /}" ] || t="$(awk '/^## What was argued/{f=1;next} /^## /{f=0} f && NF' "$f" | head -2 | tr '\n' ' ')"
+  printf '%s' "$t"
+}
+
 regen_rules() {
   local n=0
   {
@@ -54,12 +64,13 @@ regen_rules() {
         skill-rule|claude-md) ;;
         *) continue ;;
       esac
+      [ -n "$(rule_text "$f" | tr -d ' ')" ] || { echo "  skipped $(basename "$f" .md): applied but states no rule" >&2; continue; }
       n=$((n+1))
       printf -- "- **%s** (seen %s, %s): %s\n" \
         "$(basename "$f" .md)" \
         "$(grep -m1 '^seen:' "$f" | cut -d' ' -f2-)" \
         "$(grep -m1 '^source:' "$f" | cut -d' ' -f2-)" \
-        "$(awk '/^## Proposed enforcement/{f=1;next} /^## /{f=0} f && NF' "$f" | head -2 | tr '\n' ' ')"
+        "$(rule_text "$f")"
     done
     [ "$n" -eq 0 ] && echo "_No applied rules yet._"
   } > "$RULES"
@@ -86,7 +97,9 @@ case "${1:-list}" in
       sed -i '' "s/^seen: .*/seen: $n/" "$f" 2>/dev/null || sed -i "s/^seen: .*/seen: $n/" "$f"
       printf '\n## Seen again (%s, %s)\n%s\n' "$where" "$outcome" "$text" >> "$f"
       echo "$slug seen $n time(s) — appended"
-      [ "$n" -ge 3 ] && echo "  -> seen 3+ times: candidate for promotion to a CLAUDE.md hard rule."
+      if [ "$n" -ge 3 ]; then
+        echo "  -> seen 3+ times: candidate for promotion to a CLAUDE.md hard rule."
+      fi
       exit 0
     fi
     { echo "---"
@@ -123,7 +136,7 @@ case "${1:-list}" in
       found=1
       printf '%-34s %-9s %s\n' "$(basename "$f" .md)" "$(grep -m1 '^outcome:' "$f" | cut -d' ' -f2-)" "$(sed -n '/^## What was argued/{n;p;}' "$f")"
     done
-    [ "$found" -eq 0 ] && echo "_no unclassified captures_"
+    if [ "$found" -eq 0 ]; then echo "_no unclassified captures_"; fi
     ;;
 
   add)
@@ -147,7 +160,9 @@ case "${1:-list}" in
       cat
     } > "$f"
     echo "recorded $slug -> $dest ($applies)  [$DIR]"
-    [ "$applies" = "apply" ] && echo "  -> write the rule or hook now, then: lesson.sh applied $slug"
+    if [ "$applies" = "apply" ]; then
+      echo "  -> write the rule or hook now, then: lesson.sh applied $slug"
+    fi
     ;;
 
   bump)
@@ -155,13 +170,33 @@ case "${1:-list}" in
     n=$(( $(grep -m1 '^seen:' "$f" | awk '{print $2}') + 1 ))
     sed -i '' "s/^seen: .*/seen: $n/" "$f" 2>/dev/null || sed -i "s/^seen: .*/seen: $n/" "$f"
     echo "$2 seen $n time(s)"
-    [ "$n" -ge 3 ] && echo "  -> seen 3+ times: candidate for promotion to a CLAUDE.md hard rule."
+    if [ "$n" -ge 3 ]; then
+      echo "  -> seen 3+ times: candidate for promotion to a CLAUDE.md hard rule."
+    fi
     regen_rules >/dev/null
     ;;
 
   applied)
     f="$DIR/${2:?slug}.md"; [ -f "$f" ] || { echo "no such lesson" >&2; exit 1; }
     note="${3:-}"
+    # Marking an unclassified draft `applied` used to succeed and inject nothing: the
+    # rules file only carries skill-rule and claude-md, so the lesson vanished silently.
+    # Refuse instead. A no-op that reports success is the failure this tool exists to stop.
+    dest="$(grep -m1 '^destination:' "$f" | cut -d' ' -f2-)"
+    if [ "$dest" = "unclassified" ]; then
+      echo "'$2' has no destination yet, so marking it applied would inject nothing." >&2
+      echo "Classify it first — edit $f and set:" >&2
+      echo "  destination: skill-rule   (injected at session start)" >&2
+      echo "  destination: hook         (write the hook, then mark applied)" >&2
+      echo "  destination: eslint-rule | claude-md   (propose to webclients; never auto-applied)" >&2
+      exit 65
+    fi
+    case "$dest" in
+      eslint-rule|claude-md)
+        echo "'$2' is a $dest — it changes webclients and is a proposal, not something to apply here." >&2
+        echo "Leave it open and raise it with: lesson.sh pending" >&2
+        exit 65 ;;
+    esac
     sed -i '' "s/^status: .*/status: applied/" "$f" 2>/dev/null || sed -i "s/^status: .*/status: applied/" "$f"
     [ -n "$note" ] && printf '\n## Enforcement landed\n%s\n' "$note" >> "$f"
     echo "$2 marked applied; $(regen_rules) rule(s) now active"
