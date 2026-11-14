@@ -46,6 +46,15 @@ case "${1:-show}" in
       '{ticket:$tk, track:$tr, branch:$br, phase:"intake", gates:{}, waivers:{}, gateBlocks:0}' > "$f"
     echo "started $ticket on $branch (track: $track)"
     echo "phases: $(jq -r --arg t "$track" '.tracks[$t]|join(" -> ")' "$MAP")"
+    # Seed the work journal. Fails open: the dashboard is a nicety, the run is the job.
+    JOURNAL="$(dirname "$CLAUDE_PLUGIN_ROOT")/talview-learn/scripts/journal.sh"
+    if [ -x "$JOURNAL" ]; then
+      eid="$("$JOURNAL" open "$ticket" "$track" "$name" "$branch" 2>/dev/null)" || eid=""
+      [ -n "$eid" ] && {
+        jq --arg e "$eid" '.journalEntry = $e' "$f" > "$f.tmp.$$" && mv "$f.tmp.$$" "$f"
+        echo "journal: $eid"
+      }
+    fi
     ;;
 
   phase)

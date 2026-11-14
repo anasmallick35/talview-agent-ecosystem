@@ -195,6 +195,20 @@
       ],
       "$note": "Not a linear phase: a round happens each time review lands, and may repeat.",
       "fallback": "Harvest the PR, triage with the human, fix on the PR's own branch, reply to every thread."
+    },
+    "concepts": {
+      "plugin": [
+        "tlv:concept"
+      ],
+      "$note": "Runs at the end of a track, after learn. Cap of 3; routine work produces none.",
+      "fallback": "Write what the work taught into the journal entry verbatim; classify later."
+    },
+    "dashboard": {
+      "plugin": [
+        "tlv:dashboard"
+      ],
+      "$note": "Not a linear phase — open it whenever.",
+      "fallback": "Report the journal and concept counts in the response instead."
     }
   },
   "tracks": {
@@ -217,7 +231,8 @@
       "verify_browser",
       "self_review",
       "ship",
-      "learn"
+      "learn",
+      "concepts"
     ],
     "bug": [
       "intake",
@@ -230,7 +245,8 @@
       "verify_browser",
       "self_review",
       "ship",
-      "learn"
+      "learn",
+      "concepts"
     ],
     "sentry": [
       "intake",
@@ -241,7 +257,8 @@
       "test_unit",
       "self_review",
       "ship",
-      "learn"
+      "learn",
+      "concepts"
     ],
     "tech_debt": [
       "intake",
@@ -254,7 +271,8 @@
       "test_unit",
       "self_review",
       "ship",
-      "learn"
+      "learn",
+      "concepts"
     ]
   },
   "bugTrackSkills": {
