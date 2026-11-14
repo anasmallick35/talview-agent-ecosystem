@@ -166,6 +166,34 @@ hook post-edit-lint.sh "{\"cwd\":\"$NOGIT\",\"tool_input\":{\"file_path\":\"$NOG
 check "no eslint -> silent"            "${HOOK_OUT:-empty}" "empty"
 rm -rf "$NOGIT"
 
+# ------------------------------------------------------------------- stack hold
+# "Wait for me before the next PR" is L2 and gets forgotten mid-run. This is the L1
+# version: the hold is state, and only a person's command clears it.
+echo
+echo "stack hold"
+RUN="$(dirname "$CLAUDE_PLUGIN_ROOT")/tlv/scripts/run.sh"
+if [ -f "$RUN" ]; then
+  TLVROOT="$(dirname "$(dirname "$RUN")")"
+  # A run already exists on this fixture branch from the armed-gates section, and
+  # run.sh correctly refuses a second one — so tolerate it rather than fighting it.
+  rg() { ( cd "$FIX" && CLAUDE_PLUGIN_ROOT="$TLVROOT" "$RUN" "$@" >/dev/null 2>&1 ) || true; }
+  rg start T-9 feature; rg stack init 3
+  hook stack-gate.sh "{\"cwd\":\"$FIX\",\"tool_input\":{\"command\":\"gh pr create -t x\"}}" >/dev/null
+  check "no hold -> next PR allowed"      "$(decision)" "none"
+  rg stack pushed "https://x/pull/1"
+  hook stack-gate.sh "{\"cwd\":\"$FIX\",\"tool_input\":{\"command\":\"gh pr create -t x\"}}" >/dev/null
+  check "hold -> gh pr create denied"     "$(decision)" "deny"
+  hook stack-gate.sh "{\"cwd\":\"$FIX\",\"tool_input\":{\"command\":\"git checkout -b next-one\"}}" >/dev/null
+  check "hold -> new branch denied"       "$(decision)" "deny"
+  hook stack-gate.sh "{\"cwd\":\"$FIX\",\"tool_input\":{\"command\":\"git push\"}}" >/dev/null
+  check "hold -> fixing this PR allowed"  "$(decision)" "none"
+  rg stack next
+  hook stack-gate.sh "{\"cwd\":\"$FIX\",\"tool_input\":{\"command\":\"gh pr create -t x\"}}" >/dev/null
+  check "released -> next PR allowed"     "$(decision)" "none"
+else
+  ok "stack hold (tlv plugin not alongside; skipped)"
+fi
+
 echo
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]

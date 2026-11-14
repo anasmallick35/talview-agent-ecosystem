@@ -17,8 +17,9 @@ belongs inside a delivery run.
 
 | Moment | What exists | What to do |
 | --- | --- | --- |
-| End of a run (`ship`) | The ADR PR's threads — that gate waited for review | Harvest the ADR PR. Queue the code PR: `lesson.sh queue add <url>` |
-| **Review lands** | The real thing: comments, your replies, resolution | Harvest, classify, apply. This is the moment that matters |
+| **During the run, whenever the human pushes back in chat** | Nothing yet — it is in the conversation only | `lesson.sh capture <slug> <adopted\|rejected> "<one line>"`, immediately |
+| End of a run (`ship`) | The ADR PR's threads, if there was one | Harvest it. Queue each code PR: `lesson.sh queue add <url>` |
+| **Review lands on the PRs** | Comments, your replies, resolution state | Run this skill once over the whole queue. The moment that matters |
 
 The second moment reaches you two ways, neither needing you to remember a command: the
 SessionStart hook names any PR still owing a harvest, and the weekly sweep
@@ -28,11 +29,37 @@ SessionStart hook names any PR still owing a harvest, and the weekly sweep
 fix, the pairing of *what was said* and *what you did* is far harder to reconstruct, and
 the pairing is the lesson.
 
-## 1. Harvest
+## 1. Harvest — every PR in the run, in one pass
+
+You do not harvest per PR. One invocation covers the whole stack: read the queue, harvest
+each PR that has comments, and add the session drafts.
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}"/scripts/lesson.sh queue list     # PRs this run raised
+"${CLAUDE_PLUGIN_ROOT}"/scripts/lesson.sh drafts         # pushback captured in session
+```
+
+Then one harvest per queued PR:
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}"/scripts/harvest.sh <pr-number>
 ```
+
+So for a three-PR stack that all came back with comments, this skill runs **once** and
+reads all three, plus anything captured in the chat. Run it again only when a new round
+of review lands.
+
+### Two sources, and only one of them is on GitHub
+
+| Source | Where it comes from | Survives the session? |
+| --- | --- | --- |
+| PR threads | `harvest.sh` — comments, replies, resolution state | Yes, GitHub keeps it |
+| **In-session pushback** | `lesson.sh capture`, at the moment it happened | **Only if it was captured** |
+
+The second is the larger source and the one that leaks. A correction in chat costs the
+human one sentence, so they give far more of those than they ever write on a PR — and
+none of it is anywhere when the session closes. If a run ends with an empty `drafts` list
+after an argument happened, the capture step was skipped, not unnecessary.
 
 Output is **threaded**, each thread carrying its diff hunk, every reply in order, and
 whether it ended `RESOLVED` or `UNRESOLVED`. Bots are dropped; your own comments are kept
@@ -41,7 +68,21 @@ and labelled `self`, because the workspace `code-review` skill posts under your 
 Harvest both PRs from a run. ADR comments tell you the audit missed something; code
 comments tell you the implementation did. They teach different things.
 
-## 2. Pair the comment with what happened
+## 2. Classify the session drafts first
+
+`lesson.sh drafts` lists captures with `status: draft` and no destination. Each already
+records its `outcome`, which decides how it reads:
+
+- **`adopted`** — the human's position held. That position is the convention. Write it as
+  the rule.
+- **`rejected`** — their position did not survive contact with the code. The lesson is
+  *why*, written so the same argument is not re-run next month. This is not a lesson
+  about the human being wrong; it is a lesson about what the code actually requires.
+
+Give each a destination and promote it out of `draft` with `lesson.sh add` (or edit the
+file in place and set `status: open`). A draft left unclassified is injected nowhere.
+
+## 3. Pair the comment with what happened
 
 For each thread, three outcomes, three different lessons:
 
@@ -65,7 +106,7 @@ git log --oneline <base>..<head>
 Discard: typo fixes, personal style with no rule behind it, and anything already enforced
 by tooling that simply was not run.
 
-## 3. Classify by where it can be enforced
+## 4. Classify by where it can be enforced
 
 Ask: **what is the cheapest thing that would have caught this automatically?**
 
@@ -100,7 +141,7 @@ Already recorded? `lesson.sh bump <slug>` instead. At three sightings it becomes
 candidate for promotion to a CLAUDE.md hard rule — repetition is the evidence that the
 softer destination is not working.
 
-## 4. Apply what you can, then say so
+## 5. Apply what you can, then say so
 
 `skill-rule` and `hook` lessons land here: write the rule file or the hook, now. Then:
 
@@ -130,7 +171,7 @@ Finally, close the queue entry:
 "${CLAUDE_PLUGIN_ROOT}"/scripts/lesson.sh queue done <pr-url>
 ```
 
-## 5. Prove the lesson took
+## 6. Prove the lesson took
 
 Adding a rule is not evidence it changed behaviour. Add an eval case:
 

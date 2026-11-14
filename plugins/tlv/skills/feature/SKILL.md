@@ -26,6 +26,33 @@ a CLAUDE.md hard rule, not a suggestion.
 
 ### adr — **the gate**
 
+**Ask first. Do not assume a PR.** Not every change earns a document, and a ceremony
+applied to work that does not need it is how a gate stops being taken seriously. Put the
+question with AskUserQuestion, recommending one:
+
+| Option | Fits | Cost |
+| --- | --- | --- |
+| **ADR as a docs-only PR** | New architecture, a pattern others will copy, anything contested, anything you will be asked to justify in six months | A review round before any code |
+| **ADR in this thread** | A real decision with a contained blast radius — you want it stated and agreed, not filed | One message, approved inline |
+| **Skip the ADR** | The approach is obvious, the pattern already exists in the codebase, and the audit found no conflicts | Nothing — go straight to `plan` |
+
+Recommend **PR** when the audit found a rule conflict, no existing pattern to follow, or
+a backend contract that does not exist yet. Recommend **skip** when the audit found a
+directly comparable feature merged recently and nothing contradicts it.
+
+Record the answer — it changes what `run.sh next` returns:
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}"/scripts/run.sh adr pr       # or: thread, or: skip
+```
+
+Skipping the ADR does not skip the *decision*. State the approach, the reuse verdicts and
+the assumptions in the thread anyway, in a few lines. What you are skipping is the file
+and the review round, not the thinking — and if the thread version turns out to be
+contested, promote it to a PR rather than arguing in chat.
+
+#### If the answer was `pr`
+
 Write the ADR with the workspace `adr-author` skill into `docs/adr/`, numbered after the
 highest existing file. Prose follows `factual-terse`.
 
@@ -44,6 +71,18 @@ gh pr create --draft=false --title "docs(adr): NNNN <title>" --body "<summary + 
 
 **Stop here.** Say the PR is open and that you are waiting on review. Do not start
 implementation, do not create sub-issues, do not branch further.
+
+#### If the answer was `thread`
+
+Post the same content as a message: context, the options weighed, the recommendation, the
+reuse verdicts, and the gaps with the assumption taken for each. Then stop and wait for
+approval here. No branch, no file, no PR. On approval:
+`run.sh gate adr approved "approved in thread"`.
+
+#### If the answer was `skip`
+
+State the approach and the assumptions in two or three lines, then go straight to `plan`.
+`run.sh adr skip` already removed the phase from the sequence.
 
 On resumption:
 
@@ -64,6 +103,14 @@ of the run.
 `writing-plans` + `stack-planning`. Decompose into stacked PRs, one per sub-issue, each
 independently reviewable and shippable. Backend-blocked work becomes its own tracked
 item. Create Linear sub-issues with `issue-management`.
+
+Once the human has agreed how many PRs the stack is, record it:
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}"/scripts/run.sh stack init <count>
+```
+
+That number is a commitment to stop between each one. See **One PR at a time** below.
 
 ### branch → implement_* → i18n → telemetry
 Per stack: `git-workflows` / `worktree-setup`, then the phase skills. Keep
@@ -106,10 +153,39 @@ Record `pass` only for a command you ran and watched succeed. The push gate comp
 each timestamp against the newest source edit, so a pass recorded ahead of the work is
 not merely dishonest — it expires the moment you touch a file, and blocks you anyway.
 
-### ship
+### ship — **one PR at a time**
+
 `finishing-branch` + `gh stack submit`. The push gate verifies before anything leaves the
-machine: artifacts complete, lint/typecheck/test green and not stale. It replaces the
-per-push confirmation, which is why it is strict.
+machine: artifacts complete, lint/typecheck/test green and not stale.
+
+Then the stack hold, which is not optional and not yours to decide:
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}"/scripts/run.sh stack pushed "<pr url>"
+LESSON="$(dirname "${CLAUDE_PLUGIN_ROOT}")/talview-learn/scripts/lesson.sh"
+"$LESSON" queue add "<pr url>"
+```
+
+`stack pushed` arms a gate that denies `gh pr create`, `gh stack submit`, `git checkout -b`
+and `git worktree add` until a person clears it. **Say the PR is up, say which number it
+is, and stop.** Do not start the next one. Do not offer to start the next one.
+
+While the hold is on, your job is this PR and nothing else:
+
+- Answer every review thread. Changed something? Say what. Disagree? Say why.
+- Commit and push fixes to the **same branch** — both are still allowed.
+- If the human pushes back **in this session** rather than on the PR, capture it the
+  moment it is resolved. That exchange exists nowhere else:
+
+  ```bash
+  "$LESSON" capture <slug> adopted  "<what they argued, one line>"
+  "$LESSON" capture <slug> rejected "<what they argued, and why it did not hold>"
+  ```
+
+  Capture `rejected` too. Being overruled and being right are different lessons, and a
+  ledger that only records the human winning teaches the wrong thing.
+
+When they say go, they clear it: `run.sh stack next`. Only then start PR N+1.
 
 Never `gh pr merge`. Merging is a human action.
 

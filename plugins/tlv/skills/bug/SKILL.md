@@ -100,3 +100,20 @@ the intended outcome.
 - A regression test that passes before the fix.
 - Adding a null check where the real question is why the value is null.
 - Closing the ticket when the other three call sites still carry the same defect.
+
+
+## The decision record is a question, not a default
+
+Before writing anything down, ask how this run should record its approach — a docs-only
+PR, a note in this thread, or nothing at all because the fix is obvious and the pattern
+already exists. Recommend one; record the answer with `run.sh adr pr|thread|skip`. The
+approval gate still happens either way; what changes is whether it costs a review round.
+
+## One PR at a time
+
+If this becomes a stack, `run.sh stack init <count>` after the split is agreed, then
+`run.sh stack pushed "<url>"` after each push. The hold that follows is enforced, not
+advisory: the next PR cannot be started until a person runs `run.sh stack next`. While it
+is on, answer threads and push fixes to the same branch — and capture any pushback that
+happened in the session with `lesson.sh capture <slug> <adopted|rejected> "<one line>"`,
+because nothing else will remember it.
