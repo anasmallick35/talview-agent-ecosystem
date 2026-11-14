@@ -117,3 +117,18 @@ advisory: the next PR cannot be started until a person runs `run.sh stack next`.
 is on, answer threads and push fixes to the same branch — and capture any pushback that
 happened in the session with `lesson.sh capture <slug> <adopted|rejected> "<one line>"`,
 because nothing else will remember it.
+
+
+## Capture what it taught
+
+`/tlv:concept`, at most three, before closing the run. A bug that took an afternoon to
+find is the single richest source of concepts there is — the mechanism you had to learn
+to see it is exactly what will not be in the diff.
+
+```bash
+LEARN="$(dirname "${CLAUDE_PLUGIN_ROOT}")/talview-learn/scripts"
+"$LEARN"/journal.sh set "<id>" summary "<what changed, two lines>"
+```
+
+Then `/tlv:dashboard` — new concepts are due immediately, so the first revision happens
+while it is still fresh.

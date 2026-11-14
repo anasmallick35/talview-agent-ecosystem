@@ -75,3 +75,18 @@ recurrence reopens rather than hiding in an already-resolved issue.
 - Trusting a minified frame's line number without checking the sourcemap.
 - Closing a high-volume issue because it looks cosmetic, without checking user count.
 - Fixing an error that the current code can no longer reach.
+
+
+## Capture what it taught
+
+`/tlv:concept`, at most three, before closing the run. A bug that took an afternoon to
+find is the single richest source of concepts there is — the mechanism you had to learn
+to see it is exactly what will not be in the diff.
+
+```bash
+LEARN="$(dirname "${CLAUDE_PLUGIN_ROOT}")/talview-learn/scripts"
+"$LEARN"/journal.sh set "<id>" summary "<what changed, two lines>"
+```
+
+Then `/tlv:dashboard` — new concepts are due immediately, so the first revision happens
+while it is still fresh.

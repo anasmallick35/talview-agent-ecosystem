@@ -35,6 +35,10 @@ jobs:
       - name: Lesson ledger tests
         run: ./plugins/talview-learn/tests/lessons.test.sh
 
+      # Journal, concept library and the dashboard server (started on an ephemeral port).
+      - name: Dashboard tests
+        run: ./plugins/talview-learn/tests/dashboard.test.sh
+
       # Every skill a phase dispatches to must exist — workspace AND plugin side.
       # Catches a renamed or mistyped plugin skill, which `check` used to echo blindly.
       - name: Plugin skill references resolve

@@ -173,6 +173,32 @@ $TLV/skill-map.sh phase adr       # what a given phase dispatches to
 $CORE/doctor.sh                   # environment gaps and their fixes
 ```
 
+### Your learning dashboard
+
+```bash
+/tlv:concept                      # write up to 3 concept notes from the run just done
+/tlv:dashboard                    # build and serve it on localhost:4455
+$LEARN/concept.sh due             # what revision is owed
+$LEARN/journal.sh open-entries    # runs that recorded nothing
+```
+
+Three stores, siblings of each other, all on the shared ledger so every devpod sees one
+library:
+
+```
+<ledger-root>/journal/   what you did    — seeded automatically by run.sh start
+<ledger-root>/concepts/  what it taught  — written while the code is still in front of you
+<ledger-root>/lessons/   what review taught — the enforced rules
+```
+
+Revision is spaced: a concept resurfaces after 1, 3, 7, 21 then 60 days. Marking it
+`shaky` resets it to one day — forgetting is information, so it is treated as such rather
+than nudged. Review state is written back to the ledger, not the browser, so it follows
+you between containers.
+
+The dashboard is a local Node server with no dependencies and no deploy step. It rebuilds
+from the ledger on every request, so there is nothing to invalidate.
+
 ### Handling review
 
 ```bash
