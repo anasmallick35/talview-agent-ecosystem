@@ -5,6 +5,11 @@
 #   run.sh phase <name>                move to a phase (this is what arms the gates)
 #   run.sh gate <name> <status> [note] record a phase outcome
 #   run.sh waive <key> <reason>        waive a definition-of-done obligation
+#   run.sh adr <pr|thread|skip>        how this run records its decision (asked, not assumed)
+#   run.sh stack init <count>          the stack is planned; <count> PRs agreed
+#   run.sh stack pushed <pr-url>       current PR is up -> HOLD, the human reviews it
+#   run.sh stack next                  the human said go; release the hold
+#   run.sh stack show
 #   run.sh show                        current state
 #   run.sh next                        the phase that follows the current one
 
@@ -64,11 +69,51 @@ case "${1:-show}" in
     echo "waived $k: $r"
     ;;
 
+  adr)
+    need_run; m="${2:?pr|thread|skip}"
+    case "$m" in pr|thread|skip) ;; *) die "adr mode must be pr, thread or skip" ;; esac
+    jq --arg m "$m" '.adrMode = $m' "$f" > "$f.tmp" && save
+    echo "adr mode: $m"
+    [ "$m" = "skip" ] && echo "  the adr phase will be skipped; the decision still has to be stated somewhere — say it in the thread."
+    ;;
+
+  # A stack is a sequence of PRs a human reviews one at a time. The hold between them
+  # is the point: running ahead to PR 3 while PR 1 is still being argued about wastes
+  # the argument. `stack pushed` sets it; only a person clears it.
+  stack)
+    need_run; sub="${2:-show}"
+    case "$sub" in
+      init)
+        n="${3:?count}"
+        jq --argjson n "$n" '.stack = {total:$n, current:1, awaiting:false, prs:[]}' "$f" > "$f.tmp" && save
+        echo "stack: $n PR(s) planned, on 1"
+        ;;
+      pushed)
+        url="${3:?pr url}"
+        jq --arg u "$url" '.stack.prs += [{n:(.stack.current // 1), url:$u}] | .stack.awaiting = true' "$f" > "$f.tmp" && save
+        echo "PR $(jq -r '.stack.current // 1' "$f")/$(jq -r '.stack.total // "?"' "$f") is up: $url"
+        echo "HOLD — the next PR is gated until you say go (run.sh stack next)."
+        ;;
+      next)
+        [ "$(jq -r '.stack.awaiting // false' "$f")" = "true" ] || echo "note: no hold was set" >&2
+        jq '.stack.current = ((.stack.current // 1) + 1) | .stack.awaiting = false' "$f" > "$f.tmp" && save
+        c="$(jq -r '.stack.current' "$f")"; t="$(jq -r '.stack.total // "?"' "$f")"
+        echo "released -> PR $c/$t"
+        [ "$t" != "?" ] && [ "$c" -gt "$t" ] 2>/dev/null && echo "  that was the last planned PR."
+        ;;
+      show) jq -r '.stack // "no stack planned"' "$f" ;;
+      *) die "usage: run.sh stack init|pushed|next|show" ;;
+    esac
+    ;;
+
   next)
     need_run
     track="$(jq -r .track "$f")"; cur="$(jq -r .phase "$f")"
-    jq -r --arg t "$track" --arg c "$cur" \
-      '.tracks[$t] as $ps | ($ps|index($c)) as $i
+    skip_adr="$(jq -r 'if .adrMode == "skip" then "adr" else "" end' "$f")"
+    jq -r --arg t "$track" --arg c "$cur" --arg skip "$skip_adr" \
+      '.tracks[$t] as $all
+       | ($all | map(select(. != $skip))) as $ps
+       | ($ps|index($c)) as $i
        | if $i == null then $ps[0] elif $i+1 < ($ps|length) then $ps[$i+1] else "done" end' "$MAP"
     ;;
 
@@ -78,5 +123,5 @@ case "${1:-show}" in
     ;;
 
   path) echo "$f" ;;
-  *) echo "usage: run.sh start|phase|gate|waive|next|show|path" >&2; exit 64 ;;
+  *) echo "usage: run.sh start|phase|gate|waive|adr|stack|next|show|path" >&2; exit 64 ;;
 esac

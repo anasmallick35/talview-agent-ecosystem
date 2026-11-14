@@ -3,7 +3,11 @@
     "SessionStart": [
       {
         "hooks": [
-          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/session-context.sh\"", "timeout": 30 }
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/session-context.sh\"",
+            "timeout": 30
+          }
         ]
       }
     ],
@@ -11,7 +15,11 @@
       {
         "matcher": "Write|Edit",
         "hooks": [
-          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/post-edit-lint.sh\"", "timeout": 45 }
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/post-edit-lint.sh\"",
+            "timeout": 45
+          }
         ]
       }
     ],
@@ -19,14 +27,27 @@
       {
         "matcher": "Bash",
         "hooks": [
-          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/pre-push-gate.sh\"", "timeout": 60 }
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/pre-push-gate.sh\"",
+            "timeout": 60
+          },
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/stack-gate.sh\"",
+            "timeout": 20
+          }
         ]
       }
     ],
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/dod-gate.sh\"", "timeout": 60 }
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/dod-gate.sh\"",
+            "timeout": 60
+          }
         ]
       }
     ]

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # The lesson ledger. One file per lesson, classified by where it can be enforced.
 #
+#   lesson.sh capture <slug> <outcome> "<one line>"  in-session pushback, captured NOW
 #   lesson.sh add <slug> <destination> <pr-url>    create from stdin (the lesson body)
 #   lesson.sh bump <slug>                          seen again; 3+ flags for promotion
 #   lesson.sh applied <slug> [note]                the enforcement now exists
@@ -66,6 +67,65 @@ regen_rules() {
 }
 
 case "${1:-list}" in
+  # Feedback given in a chat session is not on GitHub and nothing else will remember it.
+  # It is also the most common kind: a correction costs the human one sentence, so they
+  # give far more of them than they ever write on a PR. Capture is deliberately cheap —
+  # one line, no classification — because a capture step that takes thinking is a capture
+  # step that gets skipped. /talview-learn:learn classifies drafts later.
+  #
+  # The outcome is recorded because being overruled is a different lesson from being
+  # right: `rejected` means the human's instinct did not survive contact with the code,
+  # and that is worth knowing before repeating the argument next time.
+  capture)
+    slug="${2:?slug}"; outcome="${3:?adopted|rejected|open}"; text="${4:?what was argued}"
+    case "$outcome" in adopted|rejected|open) ;; *) echo "outcome must be adopted, rejected or open" >&2; exit 64 ;; esac
+    f="$DIR/$slug.md"
+    where="session$( [ -n "${TLV_BRANCH:-}" ] && printf ':%s' "$TLV_BRANCH" )"
+    if [ -f "$f" ]; then
+      n=$(( $(grep -m1 '^seen:' "$f" | awk '{print $2}') + 1 ))
+      sed -i '' "s/^seen: .*/seen: $n/" "$f" 2>/dev/null || sed -i "s/^seen: .*/seen: $n/" "$f"
+      printf '\n## Seen again (%s, %s)\n%s\n' "$where" "$outcome" "$text" >> "$f"
+      echo "$slug seen $n time(s) — appended"
+      [ "$n" -ge 3 ] && echo "  -> seen 3+ times: candidate for promotion to a CLAUDE.md hard rule."
+      exit 0
+    fi
+    { echo "---"
+      echo "slug: $slug"
+      echo "destination: unclassified"
+      echo "action: classify"
+      echo "status: draft"
+      echo "seen: 1"
+      echo "outcome: $outcome"
+      echo "source: $where"
+      echo "---"
+      echo
+      echo "## What was argued"
+      echo "$text"
+      echo
+      echo "## Outcome"
+      case "$outcome" in
+        adopted)  echo "The human's position was adopted. Treat it as the convention until contradicted." ;;
+        rejected) echo "The human's position was NOT adopted after discussion. Record WHY, so the same argument is not re-run." ;;
+        open)     echo "Unresolved when captured." ;;
+      esac
+      echo
+      echo "## Still to do"
+      echo "Classify with /talview-learn:learn: pick a destination, then \`lesson.sh applied\`."
+    } > "$f"
+    echo "captured $slug ($outcome) — draft, classify it at the end of the run"
+    ;;
+
+  drafts)
+    found=0
+    for f in "$DIR"/*.md; do
+      [ -f "$f" ] || continue
+      grep -q '^status: draft' "$f" || continue
+      found=1
+      printf '%-34s %-9s %s\n' "$(basename "$f" .md)" "$(grep -m1 '^outcome:' "$f" | cut -d' ' -f2-)" "$(sed -n '/^## What was argued/{n;p;}' "$f")"
+    done
+    [ "$found" -eq 0 ] && echo "_no unclassified captures_"
+    ;;
+
   add)
     slug="${2:?slug}"; dest="${3:?destination}"; pr="${4:-}"
     case "$dest" in
@@ -161,5 +221,5 @@ case "${1:-list}" in
       echo; echo "--- $(basename "$f" .md) ---"; sed -n '/^---$/,/^---$/!p' "$f" | head -20
     done
     ;;
-  *) echo "usage: lesson.sh add|bump|applied|rules|list|pending|queue|path" >&2; exit 64 ;;
+  *) echo "usage: lesson.sh capture|drafts|add|bump|applied|rules|list|pending|queue|path" >&2; exit 64 ;;
 esac

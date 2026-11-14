@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "talview-core",
   "displayName": "Talview Core \u2014 Enforcement Gates",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Deterministic guardrails for Talview frontend work: edit-time lint feedback, definition-of-done gate, evidence-gated push.",
   "author": {
     "name": "Md Anas",

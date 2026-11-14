@@ -81,6 +81,21 @@ check "queueing twice is idempotent" "$("$L" queue count)" "1"
 check "harvested PR leaves the queue" "$("$L" queue count)" "0"
 
 echo
+echo "in-session capture"
+"$L" capture argued-x adopted "Export keeps raw enums; a downstream importer parses them." >/dev/null
+"$L" capture argued-y rejected "Said memoize the list; the cost was the query, not the render." >/dev/null
+check "adopted outcome recorded"  "$(grep -m1 '^outcome:' "$TLV_LESSONS_DIR/argued-x.md" | cut -d' ' -f2)" "adopted"
+check "rejected outcome recorded" "$(grep -m1 '^outcome:' "$TLV_LESSONS_DIR/argued-y.md" | cut -d' ' -f2)" "rejected"
+check "capture lands as a draft"  "$(grep -m1 '^status:' "$TLV_LESSONS_DIR/argued-y.md" | cut -d' ' -f2)" "draft"
+has "drafts are listable" "$("$L" drafts)" "argued-y"
+"$L" rules >/dev/null
+hasnt "a draft is never injected" "$(cat "$TLV_LESSONS_DIR/active-rules.md")" "argued-x"
+"$L" capture argued-x adopted "came up again" >/dev/null
+check "re-capture bumps instead of duplicating" "$(grep -m1 '^seen:' "$TLV_LESSONS_DIR/argued-x.md" | cut -d' ' -f2)" "2"
+"$L" capture bad-outcome sideways "x" >/dev/null 2>&1
+check "invalid outcome refused" "$?" "64"
+
+echo
 echo "SessionStart injection"
 mkdir -p "$FIX" && cd "$FIX"
 git init -q -b develop . && git config user.email t@t && git config user.name t
