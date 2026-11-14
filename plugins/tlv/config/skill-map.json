@@ -4,13 +4,13 @@
   "phases": {
     "intake": {
       "plugin": [
-        "tlv-intake"
+        "tlv:start"
       ],
       "fallback": "Classify from the ticket text alone and state the classification."
     },
     "audit": {
       "plugin": [
-        "tlv-audit"
+        "tlv:audit"
       ],
       "workspaceAgents": [
         "Explore"
@@ -143,7 +143,7 @@
     },
     "verify_browser": {
       "plugin": [
-        "tlv-verify-browser"
+        "talview-verify:verify-browser"
       ],
       "workspace": [
         "playwright-login"
@@ -169,7 +169,7 @@
         "verification-before-completion"
       ],
       "plugin": [
-        "react-code-quality"
+        "talview-review:react-code-quality"
       ],
       "fallback": "Run the checklist in react-code-quality/CHECKLIST.md."
     },
@@ -182,7 +182,7 @@
     },
     "learn": {
       "plugin": [
-        "tlv-learn"
+        "talview-learn:learn"
       ],
       "fallback": "Record review feedback verbatim; do not attempt to route it."
     }
