@@ -200,7 +200,7 @@
       "plugin": [
         "tlv:concept"
       ],
-      "$note": "Runs at the end of a track, after learn. Cap of 3; routine work produces none.",
+      "$note": "Deliberately NOT in any track: capture is opt-in via /tlv:concept. A run ends at `learn`.",
       "fallback": "Write what the work taught into the journal entry verbatim; classify later."
     },
     "dashboard": {
@@ -231,8 +231,7 @@
       "verify_browser",
       "self_review",
       "ship",
-      "learn",
-      "concepts"
+      "learn"
     ],
     "bug": [
       "intake",
@@ -245,8 +244,7 @@
       "verify_browser",
       "self_review",
       "ship",
-      "learn",
-      "concepts"
+      "learn"
     ],
     "sentry": [
       "intake",
@@ -257,8 +255,7 @@
       "test_unit",
       "self_review",
       "ship",
-      "learn",
-      "concepts"
+      "learn"
     ],
     "tech_debt": [
       "intake",
@@ -271,8 +268,7 @@
       "test_unit",
       "self_review",
       "ship",
-      "learn",
-      "concepts"
+      "learn"
     ]
   },
   "bugTrackSkills": {

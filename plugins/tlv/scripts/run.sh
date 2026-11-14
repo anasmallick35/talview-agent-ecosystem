@@ -50,10 +50,13 @@ case "${1:-show}" in
     JOURNAL="$(dirname "$CLAUDE_PLUGIN_ROOT")/talview-learn/scripts/journal.sh"
     if [ -x "$JOURNAL" ]; then
       eid="$("$JOURNAL" open "$ticket" "$track" "$name" "$branch" 2>/dev/null)" || eid=""
+      # Silent. The capture feature is opt-in (/tlv:concept, /tlv:dashboard), so a run
+      # should not announce it. The entry is still seeded: it costs one file write and
+      # means the timeline is not empty for anyone who does open the dashboard.
       [ -n "$eid" ] && {
         jq --arg e "$eid" '.journalEntry = $e' "$f" > "$f.tmp.$$" && mv "$f.tmp.$$" "$f"
-        echo "journal: $eid"
       }
+      true
     fi
     ;;
 
