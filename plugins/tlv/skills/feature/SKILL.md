@@ -187,6 +187,25 @@ While the hold is on, your job is this PR and nothing else:
 
 When they say go, they clear it: `run.sh stack next`. Only then start PR N+1.
 
+#### Committing
+
+Bound the commit in time — use the agent harness's own command timeout, since GNU
+`timeout(1)` is not present on a stock macOS. If the commit **fails for any reason, or
+runs past ~30 seconds**, stop there:
+
+- Print the full commit message in a copyable block, plus whatever the hook printed.
+- Say what happened. Do not retry, do not wait it out, do not reduce the scope to get
+  past it, and never `--no-verify`.
+- The human commits it. Only once they confirm it landed may you push or open the PR.
+
+The hooks in this workspace are slow and can fail on pre-existing problems that have
+nothing to do with this change. What to do about that — fix it, split the commit, commit
+by hand — is the human's call, and it is a call they can only make while the message and
+the hook output are in front of them. A silent retry hides the decision; a blocked turn
+hides it for longer.
+
+A failed or timed-out commit is never followed by a push.
+
 Never `gh pr merge`. Merging is a human action.
 
 ### learn
