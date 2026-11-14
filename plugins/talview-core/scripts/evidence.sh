@@ -47,7 +47,7 @@ case "${1:-}" in
     jq --arg k "$check" --arg s "$status" --arg c "$cmd" --arg n "$note" \
        --argjson t "$now" --argjson m "$src" \
        '.[$k] = {status:$s, command:$c, note:$n, at:$t, sourceMtime:$m}' \
-       "$ledger" > "$ledger.tmp" && mv "$ledger.tmp" "$ledger"
+       "$ledger" > "$ledger.tmp.$$" && mv "$ledger.tmp.$$" "$ledger"
     echo "recorded: $check=$status"
     ;;
   show) cat "$ledger" ;;

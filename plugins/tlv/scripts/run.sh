@@ -32,7 +32,10 @@ mkdir -p "$dir"
 
 die() { echo "$1" >&2; exit 1; }
 need_run() { [ -f "$f" ] || die "No run on branch '$branch'. Start one: run.sh start <TICKET> <track>"; }
-save() { mv "$f.tmp" "$f"; }
+# Temp files carry $$ so two processes — two devpod containers sharing a mounted
+# state dir, or two sessions on one machine — cannot write the same scratch path and
+# hand each other a half-written file on rename.
+save() { mv "$f.tmp.$$" "$f"; }
 
 case "${1:-show}" in
   start)
@@ -50,7 +53,7 @@ case "${1:-show}" in
     jq -e --arg p "$p" '.phases[$p]' "$MAP" >/dev/null 2>&1 || die "Unknown phase '$p'"
     armed=false
     jq -e --arg p "$p" '.armedPhases | index($p)' "$MAP" >/dev/null 2>&1 && armed=true
-    jq --arg p "$p" --argjson a "$armed" '.phase = $p | .armed = $a | .gateBlocks = 0' "$f" > "$f.tmp" && save
+    jq --arg p "$p" --argjson a "$armed" '.phase = $p | .armed = $a | .gateBlocks = 0' "$f" > "$f.tmp.$$" && save
     echo "phase -> $p"
     [ "$armed" = "true" ] \
       && echo "definition-of-done gates ARMED: tests, stories, e2e and locale parity are now blocking." \
@@ -60,21 +63,21 @@ case "${1:-show}" in
   gate)
     need_run; g="${2:?gate}"; st="${3:?status}"; note="${4:-}"
     jq --arg g "$g" --arg s "$st" --arg n "$note" \
-      '.gates[$g] = {status:$s, note:$n}' "$f" > "$f.tmp" && save
+      '.gates[$g] = {status:$s, note:$n}' "$f" > "$f.tmp.$$" && save
     echo "gate $g = $st"
     ;;
 
   waive)
     need_run; k="${2:?key}"; r="${3:-}"
     [ -n "$r" ] || die "waive needs a reason — a waiver without one is just a skip"
-    jq --arg k "$k" --arg r "$r" '.waivers[$k] = $r' "$f" > "$f.tmp" && save
+    jq --arg k "$k" --arg r "$r" '.waivers[$k] = $r' "$f" > "$f.tmp.$$" && save
     echo "waived $k: $r"
     ;;
 
   adr)
     need_run; m="${2:?pr|thread|skip}"
     case "$m" in pr|thread|skip) ;; *) die "adr mode must be pr, thread or skip" ;; esac
-    jq --arg m "$m" '.adrMode = $m' "$f" > "$f.tmp" && save
+    jq --arg m "$m" '.adrMode = $m' "$f" > "$f.tmp.$$" && save
     echo "adr mode: $m"
     if [ "$m" = "skip" ]; then
       echo "  the adr phase will be skipped; the decision still has to be stated somewhere — say it in the thread."
@@ -89,13 +92,13 @@ case "${1:-show}" in
     case "$sub" in
       init)
         n="${3:?count}"
-        jq --argjson n "$n" '.stack = {total:$n, current:1, awaiting:false, prs:[]}' "$f" > "$f.tmp" && save
+        jq --argjson n "$n" '.stack = {total:$n, current:1, awaiting:false, prs:[]}' "$f" > "$f.tmp.$$" && save
         echo "stack: $n PR(s) planned, on 1"
         ;;
       pushed)
         url="${3:?pr url}"
         jq --arg u "$url" --argjson t "$(date +%s)" \
-          '.stack.prs += [{n:(.stack.current // 1), url:$u}] | .stack.awaiting = true | .stack.holdAt = $t' "$f" > "$f.tmp" && save
+          '.stack.prs += [{n:(.stack.current // 1), url:$u}] | .stack.awaiting = true | .stack.holdAt = $t' "$f" > "$f.tmp.$$" && save
         echo "PR $(jq -r '.stack.current // 1' "$f")/$(jq -r '.stack.total // "?"' "$f") is up: $url"
         echo "HOLD — the next PR is gated until you say go (run.sh stack next)."
         ;;
@@ -112,7 +115,9 @@ case "${1:-show}" in
 # order is the only one that is safe on both.
         if [ "${3:-}" != "--nothing-learned" ]; then
           held="$(jq -r '.stack.holdAt // 0' "$f")"
-          lessons="${TLV_LESSONS_DIR:-${TLV_HOME:-$HOME}/.talview/lessons}"
+          if [ -n "${TLV_LESSONS_DIR:-}" ]; then lessons="$TLV_LESSONS_DIR"
+          elif [ -n "${CLAUDE_CONFIG_DIR:-}" ]; then lessons="$CLAUDE_CONFIG_DIR/talview/lessons"
+          else lessons="${TLV_HOME:-$HOME}/.talview/lessons"; fi
           fresh=0
           if [ "$held" -gt 0 ] 2>/dev/null && [ -d "$lessons" ]; then
             for l in "$lessons"/*.md; do
@@ -139,7 +144,7 @@ If the round genuinely taught nothing — a typo fix, a rename — say so explic
            | .stack.awaiting = false
            | if $nl == "--nothing-learned"
              then .stack.nothingLearned = ((.stack.nothingLearned // []) + [(.stack.current - 1)])
-             else . end' "$f" > "$f.tmp" && save
+             else . end' "$f" > "$f.tmp.$$" && save
         c="$(jq -r '.stack.current' "$f")"; t="$(jq -r '.stack.total // "?"' "$f")"
         echo "released -> PR $c/$t"
         if [ "$t" != "?" ] && [ "$c" -gt "$t" ] 2>/dev/null; then

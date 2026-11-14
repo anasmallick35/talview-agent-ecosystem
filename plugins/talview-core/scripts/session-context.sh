@@ -19,7 +19,9 @@ branch="$(tlv_branch)"; [ -n "$branch" ] || exit 0
 # Rules learned from past review, and PRs whose review is not harvested yet. These are
 # NOT scoped to a tracked run: a rule that only applies during /tlv:start is a rule that
 # does not apply. Kept short — this is injected into every session on this machine.
-lessons_dir="${TLV_LESSONS_DIR:-${TLV_HOME:-$HOME}/.talview/lessons}"
+if [ -n "${TLV_LESSONS_DIR:-}" ]; then lessons_dir="$TLV_LESSONS_DIR"
+elif [ -n "${CLAUDE_CONFIG_DIR:-}" ]; then lessons_dir="$CLAUDE_CONFIG_DIR/talview/lessons"
+else lessons_dir="${TLV_HOME:-$HOME}/.talview/lessons"; fi
 learned=""
 if [ -s "$lessons_dir/active-rules.md" ]; then
   rules="$(grep '^- ' "$lessons_dir/active-rules.md" 2>/dev/null | head -25)"
