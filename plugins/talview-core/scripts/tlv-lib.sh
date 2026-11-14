@@ -25,8 +25,15 @@ tlv_field() {
   tlv_read_input | jq -r "${1} // empty" 2>/dev/null || printf ''
 }
 
+# TLV_ROOT_OVERRIDE lets a hook that has worked out the real target repository tell
+# every other helper about it. Without it the protected-branch check and the evidence
+# ledger can disagree about which repo is being judged — the worst kind of gate, one
+# that is half right.
 tlv_repo_root() {
   local cwd
+  if [ -n "${TLV_ROOT_OVERRIDE:-}" ] && [ -d "${TLV_ROOT_OVERRIDE}" ]; then
+    printf '%s' "$TLV_ROOT_OVERRIDE"; return
+  fi
   cwd="$(tlv_field '.cwd')"
   [ -n "$cwd" ] && [ -d "$cwd" ] || cwd="$PWD"
   git -C "$cwd" rev-parse --show-toplevel 2>/dev/null || printf '%s' "$cwd"

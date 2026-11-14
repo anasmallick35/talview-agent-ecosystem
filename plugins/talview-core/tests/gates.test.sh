@@ -87,6 +87,18 @@ check "judges the cd'd repo, not the session" "$(decision)" "none"
 git -C "$OTHER" checkout -q develop
 hook pre-push-gate.sh "{\"cwd\":\"$FIX\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"cd $OTHER && git push origin develop\"}}" >/dev/null
 check "protected branch in the cd'd repo denied" "$(decision)" "deny"
+
+# Half a fix is worse than none: if the branch check follows the cd'd repo but the
+# evidence ledger does not, the gate reads another workspace's proof. The ledger for
+# the target repo lives under its own name in the state dir.
+git -C "$OTHER" checkout -q feat/elsewhere
+mkdir -p "$TLV_HOME/.talview/other/runs"
+echo '{"ticket":"X-1","track":"feature","phase":"ship","armed":true,"waivers":{},"gateBlocks":0}' \
+  > "$TLV_HOME/.talview/other/runs/feat-elsewhere.json"
+hook pre-push-gate.sh "{\"cwd\":\"$FIX\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"cd $OTHER && git push -u origin feat/elsewhere\"}}" >/dev/null
+check "tracked target repo is denied on no evidence" "$(decision)" "deny"
+printf '%s' "$HOOK_OUT" | jq -r '.hookSpecificOutput.permissionDecisionReason' | grep -q 'Never run on this branch' \
+  && ok "reads the TARGET repo's ledger" || no "reads the TARGET repo's ledger"
 git -C "$FIX" checkout -q feat/demo
 rm -rf "$OTHER"
 

@@ -48,7 +48,8 @@ esac
 root="$(tlv_repo_root)"
 if [ -n "$target_dir" ]; then
   alt="$(git -C "$target_dir" rev-parse --show-toplevel 2>/dev/null)"
-  [ -n "$alt" ] && root="$alt"
+  # Export, not just assign: dod-check.sh runs as a child and must judge the same repo.
+  [ -n "$alt" ] && { root="$alt"; TLV_ROOT_OVERRIDE="$alt"; export TLV_ROOT_OVERRIDE; }
 fi
 cd "$root" || exit 0
 branch="$(git -C "$root" rev-parse --abbrev-ref HEAD 2>/dev/null)"
