@@ -174,9 +174,10 @@ echo "stack hold"
 RUN="$(dirname "$CLAUDE_PLUGIN_ROOT")/tlv/scripts/run.sh"
 if [ -f "$RUN" ]; then
   TLVROOT="$(dirname "$(dirname "$RUN")")"
+  TMPL="$TLV_HOME/lessons-under-test"
   # A run already exists on this fixture branch from the armed-gates section, and
   # run.sh correctly refuses a second one — so tolerate it rather than fighting it.
-  rg() { ( cd "$FIX" && CLAUDE_PLUGIN_ROOT="$TLVROOT" "$RUN" "$@" >/dev/null 2>&1 ) || true; }
+  rg() { ( cd "$FIX" && CLAUDE_PLUGIN_ROOT="$TLVROOT" TLV_LESSONS_DIR="$TMPL" "$RUN" "$@" >/dev/null 2>&1 ) || true; }
   rg start T-9 feature; rg stack init 3
   hook stack-gate.sh "{\"cwd\":\"$FIX\",\"tool_input\":{\"command\":\"gh pr create -t x\"}}" >/dev/null
   check "no hold -> next PR allowed"      "$(decision)" "none"
@@ -187,9 +188,20 @@ if [ -f "$RUN" ]; then
   check "hold -> new branch denied"       "$(decision)" "deny"
   hook stack-gate.sh "{\"cwd\":\"$FIX\",\"tool_input\":{\"command\":\"git push\"}}" >/dev/null
   check "hold -> fixing this PR allowed"  "$(decision)" "none"
-  rg stack next
+  # Releasing the hold is where a review round is unambiguously over, so it is where
+  # "did this teach us anything" is asked. Nothing recorded -> refuse, with an explicit
+  # escape hatch rather than a silent pass.
+  rc=0; ( cd "$FIX" && CLAUDE_PLUGIN_ROOT="$TLVROOT" TLV_LESSONS_DIR="$TMPL" "$RUN" stack next >/dev/null 2>&1 ) || rc=$?
+  check "empty round refuses to release"  "$rc" "1"
+  rg stack next --nothing-learned
   hook stack-gate.sh "{\"cwd\":\"$FIX\",\"tool_input\":{\"command\":\"gh pr create -t x\"}}" >/dev/null
   check "released -> next PR allowed"     "$(decision)" "none"
+
+  # ...and a round that did record something releases without the flag.
+  rg stack pushed "https://x/pull/2"
+  mkdir -p "$TMPL" && sleep 1 && printf -- '---\nslug: x\nstatus: draft\n---\n' > "$TMPL/x.md"
+  rc=0; ( cd "$FIX" && CLAUDE_PLUGIN_ROOT="$TLVROOT" TLV_LESSONS_DIR="$TMPL" "$RUN" stack next >/dev/null 2>&1 ) || rc=$?
+  check "round with a lesson releases"    "$rc" "0"
 else
   ok "stack hold (tlv plugin not alongside; skipped)"
 fi

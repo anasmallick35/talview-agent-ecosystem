@@ -47,6 +47,7 @@ gh api graphql -f owner="$owner" -f name="$name" -F pr="$pr" -f query='
       pullRequest(number:$pr) {
         reviewThreads(first:100) {
           nodes {
+            id
             isResolved
             isOutdated
             path
@@ -66,7 +67,7 @@ gh api graphql -f owner="$owner" -f name="$name" -F pr="$pr" -f query='
     | ($cs | map(select(.author.login | test("\\[bot\\]$") | not))) as $cs
     | (if $xs == 1 then ($cs | map(select(.author.login != $me))) else $cs end) as $cs
     | select($cs | length > 0)
-    | "### \($t.path):\($t.line // "?")  — \(if $t.isResolved then "RESOLVED" else "UNRESOLVED" end)\(if $t.isOutdated then ", outdated" else "" end), \($cs|length) comment(s)\n"
+    | "### \($t.path):\($t.line // "?")  — \(if $t.isResolved then "RESOLVED" else "UNRESOLVED" end)\(if $t.isOutdated then ", outdated" else "" end), \($cs|length) comment(s)\n`thread: \($t.id)`\n"
       + "\n```diff\n\($cs[0].diffHunk // "")\n```\n"
       + ([ $cs[] | "**@\(.author.login)** [\(if .author.login == $me then "self" else "reviewer" end)]:\n\(.body)\n" ] | join("\n"))
       + (if ($cs|length) > 1 then "\n_This thread has replies. Pair the opening comment with the last one and with what the diff does now — agreement, pushback and silence are three different lessons._\n" else "" end)

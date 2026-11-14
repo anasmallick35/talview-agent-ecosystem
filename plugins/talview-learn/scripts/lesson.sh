@@ -86,7 +86,9 @@ case "${1:-list}" in
       sed -i '' "s/^seen: .*/seen: $n/" "$f" 2>/dev/null || sed -i "s/^seen: .*/seen: $n/" "$f"
       printf '\n## Seen again (%s, %s)\n%s\n' "$where" "$outcome" "$text" >> "$f"
       echo "$slug seen $n time(s) — appended"
-      [ "$n" -ge 3 ] && echo "  -> seen 3+ times: candidate for promotion to a CLAUDE.md hard rule."
+      if [ "$n" -ge 3 ]; then
+        echo "  -> seen 3+ times: candidate for promotion to a CLAUDE.md hard rule."
+      fi
       exit 0
     fi
     { echo "---"
@@ -123,7 +125,7 @@ case "${1:-list}" in
       found=1
       printf '%-34s %-9s %s\n' "$(basename "$f" .md)" "$(grep -m1 '^outcome:' "$f" | cut -d' ' -f2-)" "$(sed -n '/^## What was argued/{n;p;}' "$f")"
     done
-    [ "$found" -eq 0 ] && echo "_no unclassified captures_"
+    if [ "$found" -eq 0 ]; then echo "_no unclassified captures_"; fi
     ;;
 
   add)
@@ -147,7 +149,9 @@ case "${1:-list}" in
       cat
     } > "$f"
     echo "recorded $slug -> $dest ($applies)  [$DIR]"
-    [ "$applies" = "apply" ] && echo "  -> write the rule or hook now, then: lesson.sh applied $slug"
+    if [ "$applies" = "apply" ]; then
+      echo "  -> write the rule or hook now, then: lesson.sh applied $slug"
+    fi
     ;;
 
   bump)
@@ -155,7 +159,9 @@ case "${1:-list}" in
     n=$(( $(grep -m1 '^seen:' "$f" | awk '{print $2}') + 1 ))
     sed -i '' "s/^seen: .*/seen: $n/" "$f" 2>/dev/null || sed -i "s/^seen: .*/seen: $n/" "$f"
     echo "$2 seen $n time(s)"
-    [ "$n" -ge 3 ] && echo "  -> seen 3+ times: candidate for promotion to a CLAUDE.md hard rule."
+    if [ "$n" -ge 3 ]; then
+      echo "  -> seen 3+ times: candidate for promotion to a CLAUDE.md hard rule."
+    fi
     regen_rules >/dev/null
     ;;
 

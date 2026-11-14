@@ -141,6 +141,7 @@ open PR without stopping.
 | `/tlv:sentry` | Sentry track — gate is the verdict: fix, file, snooze or close |
 | `/tlv:tech-debt` | tech-debt track — gate is the approach, prove nothing changed |
 | `/talview-verify:verify-browser` | drive the real UI, capture evidence |
+| `/tlv:review-round` | a round of review, handled: harvest, triage, fix, reply, resolve, learn |
 | `/talview-learn:learn` | review feedback into enforcement |
 
 `learn` is the one phase that cannot complete inside the run that triggers it: at `ship`
@@ -172,6 +173,17 @@ $TLV/skill-map.sh phase adr       # what a given phase dispatches to
 $CORE/doctor.sh                   # environment gaps and their fixes
 ```
 
+### Handling review
+
+```bash
+/tlv:review-round                 # every PR the run raised, in one pass
+$LEARN/thread.sh list 19574 --repo talview/webclients
+$LEARN/thread.sh close <thread-id> <<<"Fixed in abc1234: <what changed>."
+```
+
+Harvest before fixing — once the fix is pushed, pairing *what was said* with *what was
+done* is guesswork, and the pair is the lesson.
+
 ### Driving a run
 
 ```bash
@@ -180,6 +192,23 @@ $TLV/run.sh phase implement_ui           # gates idle — still building
 $TLV/run.sh phase test_unit              # gates ARM here
 $TLV/run.sh gate adr approved "<PR url>"
 ```
+
+### Pacing a stack
+
+```bash
+$TLV/run.sh adr pr|thread|skip           # how this run records its decision
+$TLV/run.sh stack init 3                 # 3 PRs agreed
+$TLV/run.sh stack pushed "<pr url>"      # PR is up -> HOLD
+$TLV/run.sh stack next                   # you said go
+```
+
+The hold is enforced: `gh pr create`, `gh stack submit`, `git checkout -b` and
+`git worktree add` are denied until a person releases it. Pushing fixes to the PR under
+review stays allowed — that is the work the hold exists for.
+
+`stack next` also refuses while the round has recorded nothing. Review happened and the
+ledger did not move usually means the argument is still only in a chat window. Say
+`--nothing-learned` when a round genuinely taught nothing.
 
 `phase` is the control that arms and disarms the gates. Everything from `test_unit`
 onward blocks on missing tests, stories, Cypress specs and locale parity.
