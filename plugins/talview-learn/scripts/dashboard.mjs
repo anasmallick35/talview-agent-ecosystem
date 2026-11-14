@@ -105,30 +105,45 @@ function markReviewed(slug, result) {
   return { ok: true, stage, nextIn: LADDER[Math.min(stage, LADDER.length - 1)] };
 }
 
+
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 // Minimal markdown: headings, fenced code, inline code, bold, lists, paragraphs.
 function md(src) {
-  const out = []; let inCode = false, inList = false;
+  // Source is hard-wrapped at ~80 columns. Treating every source line as its own
+  // paragraph split sentences mid-clause and left orphan words on their own lines —
+  // so consecutive non-blank lines are joined, as markdown intends.
+  const out = []; let inCode = false, inList = false, para = [];
+  const inline = t => t
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+    .replace(/(^|[\s(])\*([^*\s][^*]*)\*(?=[\s.,;:)]|$)/g, '$1<em>$2</em>');
+  const flush = () => { if (para.length) { out.push('<p>' + inline(para.join(' ')) + '</p>'); para = []; } };
+  const closeList = () => { if (inList) { out.push('</ul>'); inList = false; } };
+
   for (const raw of String(src).split('\n')) {
     if (raw.startsWith('```')) {
-      if (inList) { out.push('</ul>'); inList = false; }
-      out.push(inCode ? '</code></pre>' : `<pre class="code"><code>`); inCode = !inCode; continue;
+      flush(); closeList();
+      out.push(inCode ? '</code></pre>' : '<pre class="code"><code>'); inCode = !inCode; continue;
     }
     if (inCode) { out.push(esc(raw)); continue; }
     const line = esc(raw);
-    const inline = t => t.replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
     const h = line.match(/^(#{1,4})\s+(.*)$/);
-    if (h) { if (inList) { out.push('</ul>'); inList = false; } out.push(`<h${h[1].length + 2}>${inline(h[2])}</h${h[1].length + 2}>`); continue; }
+    if (h) { flush(); closeList(); out.push('<h4>' + inline(h[2]) + '</h4>'); continue; }
     const li = line.match(/^\s*(?:[-*]|\d+\.)\s+(.*)$/);
-    if (li) { if (!inList) { out.push('<ul>'); inList = true; } out.push(`<li>${inline(li[1])}</li>`); continue; }
-    if (!line.trim()) { if (inList) { out.push('</ul>'); inList = false; } continue; }
-    if (inList) { out.push('</ul>'); inList = false; }
-    out.push(`<p>${inline(line)}</p>`);
+    if (li) { flush(); if (!inList) { out.push('<ul>'); inList = true; } out.push('<li>' + inline(li[1]) + '</li>'); continue; }
+    if (!line.trim()) { flush(); closeList(); continue; }
+    // A continuation line inside a list item belongs to that item, not a new paragraph.
+    if (inList && /^\s{2,}\S/.test(raw)) { out[out.length - 1] = out[out.length - 1].replace(/<\/li>$/, ' ' + inline(line.trim()) + '</li>'); continue; }
+    closeList(); para.push(line.trim());
   }
-  if (inList) out.push('</ul>');
+  flush(); closeList();
   if (inCode) out.push('</code></pre>');
   return out.join('\n');
+}
+
+function inlineMd(s) {
+  return esc(s).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
 }
 
 function page() {
@@ -139,130 +154,269 @@ function page() {
   // `</script>`, and needs no decoding. U+2028/9 are legal in JSON but not in JS strings.
   const data = JSON.stringify({ concepts, journal, lessons, today: today() })
     .replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+  const due = concepts.filter(c => c.due).length;
+
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Learning dashboard</title>
+<title>Logbook</title>
 <style>
-:root{--bg:#fbfaf8;--panel:#fff;--ink:#1c1b19;--muted:#6b6862;--line:#e6e2db;--accent:#9a5b3d;--ok:#3d6b4a;--warn:#8a6d1f;--code:#f4f1ec}
-@media (prefers-color-scheme:dark){:root{--bg:#16150f;--panel:#1e1d17;--ink:#eceae4;--muted:#9b978e;--line:#32302a;--accent:#d79b76;--ok:#8fc29c;--warn:#ddc37a;--code:#13120e}}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 ui-sans-serif,-apple-system,"Segoe UI",sans-serif}
-header{padding:20px 24px 0;max-width:1180px;margin:0 auto}
-h1{font-size:19px;margin:0 0 2px;letter-spacing:-.01em}.sub{color:var(--muted);font-size:13px;margin:0 0 14px}
-nav{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--line)}
-nav button{background:none;border:0;border-bottom:2px solid transparent;color:var(--muted);padding:8px 12px;cursor:pointer;font:inherit;font-size:13px}
-nav button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
-main{max-width:1180px;margin:0 auto;padding:18px 24px 64px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:10px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
-.row{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
-.tag{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:1px 8px}
-.pill{font-size:11px;border-radius:999px;padding:1px 8px;border:1px solid var(--line)}
-.due{color:var(--warn);border-color:var(--warn)}.known{color:var(--ok);border-color:var(--ok)}
-.muted{color:var(--muted);font-size:13px}.date{font-variant-numeric:tabular-nums;color:var(--muted);font-size:12px}
-h2{font-size:15px;margin:22px 0 8px}h3,h4,h5{font-size:14px;margin:14px 0 4px}
-pre.code{background:var(--code);border:1px solid var(--line);border-radius:8px;padding:10px 12px;overflow-x:auto;font-size:12.5px;line-height:1.5}
-code{background:var(--code);padding:1px 5px;border-radius:4px;font-size:12.5px}
-pre.code code{background:none;padding:0}
-button.act{font:inherit;font-size:13px;padding:6px 12px;border-radius:7px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
-button.act:hover{border-color:var(--accent)}
-.hide{display:none}.stat{font-size:26px;font-weight:600;letter-spacing:-.02em}
-input[type=search]{font:inherit;font-size:13px;padding:6px 10px;border-radius:7px;border:1px solid var(--line);background:var(--panel);color:var(--ink);width:240px}
-details>summary{cursor:pointer;color:var(--muted);font-size:13px}
+/* Ink on paper. A logbook, not an analytics product: no charts, no stat tiles, no
+   cards-for-everything. Structure comes from rules and rails, which carry meaning —
+   a date rail IS the chronology, not decoration around it. */
+:root{
+  --paper:#f7f7f4; --raised:#fff; --ink:#16181d; --ink-soft:#575b64; --ink-faint:#8b8f98;
+  --rule:#e2e2db; --rule-firm:#cfcfc6; --accent:#2743c9; --fading:#9a6b16; --held:#2f6b5e;
+  --mark:#f0eee4;
+  --serif:"Iowan Old Style",Palatino,"Palatino Linotype","Book Antiqua",Georgia,serif;
+  --sans:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root{
+  --paper:#121419; --raised:#171a20; --ink:#e8e9ec; --ink-soft:#a2a7b2; --ink-faint:#71767f;
+  --rule:#272a31; --rule-firm:#363a43; --accent:#8ba0ff; --fading:#c9a24a; --held:#67b39e;
+  --mark:#1d2027;
+}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font:400 15px/1.55 var(--sans);
+  font-variant-numeric:tabular-nums}
+.wrap{max-width:1080px;margin:0 auto;padding:0 28px}
+
+/* ── masthead ─────────────────────────────────────────────────────────────── */
+header{padding:40px 0 0}
+/* The hero is a sentence, not a number: the state of your memory is the thing this
+   page exists to tell you, and it reads better as prose than as a tile. */
+.state{font:400 clamp(26px,3.6vw,38px)/1.22 var(--serif);margin:0 0 6px;max-width:22ch;
+  letter-spacing:-.01em}
+.state b{font-weight:600;font-style:normal;color:var(--fading)}
+.state .ok{color:var(--held)}
+.state-sub{color:var(--ink-soft);font-size:14px;margin:0 0 26px;max-width:58ch}
+nav{display:flex;gap:26px;border-bottom:1px solid var(--rule-firm);margin-bottom:2px}
+nav button{appearance:none;background:none;border:0;padding:0 0 10px;margin:0;cursor:pointer;
+  font:500 14px/1 var(--sans);color:var(--ink-faint);position:relative}
+nav button:hover{color:var(--ink)}
+nav button[aria-current=true]{color:var(--ink)}
+nav button[aria-current=true]::after{content:"";position:absolute;left:0;right:0;bottom:-1px;
+  height:2px;background:var(--accent)}
+nav .count{font:500 11px/1 var(--mono);color:var(--fading);margin-left:5px}
+main{padding:28px 0 90px;min-height:50vh}
+
+/* ── timeline: a date rail, single-line rows ──────────────────────────────── */
+.day{display:grid;grid-template-columns:92px 1fr;gap:0 20px;border-top:1px solid var(--rule)}
+.day:first-child{border-top:0}
+.day-date{font:500 12px/1.4 var(--mono);color:var(--ink-faint);padding:14px 0 0;
+  position:sticky;top:0;align-self:start}
+.day-rows{padding:6px 0 14px}
+.row{display:flex;gap:11px;align-items:baseline;padding:7px 0;border-bottom:1px dotted var(--rule)}
+.row:last-child{border-bottom:0}
+.track{font:500 11px/1 var(--mono);color:var(--ink-faint);width:34px;flex:none;
+  padding-top:2px;white-space:nowrap}
+.track.bug{color:var(--fading)} .track.feature{color:var(--accent)} .track.tech_debt{color:var(--held)}
+.row-id{font:500 13px/1.4 var(--mono);flex:none}
+.row-id a{color:inherit;text-decoration:none;border-bottom:1px solid var(--rule-firm)}
+.row-id a:hover{border-bottom-color:var(--accent);color:var(--accent)}
+.row-title{color:var(--ink-soft);font-size:14px}
+.row-learned{display:block;font-size:12.5px;color:var(--ink-faint);
+  margin:-4px 0 8px 45px;padding-left:12px;border-left:2px solid var(--rule)}
+.row-learned i{font-style:normal;border-bottom:1px solid var(--rule-firm)}
+
+/* ── revision: one at a time ──────────────────────────────────────────────── */
+.deck{max-width:660px}
+.deck-pos{font:500 12px/1 var(--mono);color:var(--ink-faint);margin-bottom:18px}
+.q{font:400 clamp(20px,2.4vw,25px)/1.4 var(--serif);margin:0 0 4px}
+.q code{font:400 .82em/1 var(--mono);background:var(--mark);padding:3px 6px;border-radius:3px}
+.q-meta{color:var(--ink-faint);font-size:13px;margin:10px 0 24px}
+.q-meta span+span::before{content:"/";margin:0 7px;color:var(--rule-firm)}
+.answer{border-top:1px solid var(--rule);padding-top:18px;margin-top:4px}
+.acts{display:flex;gap:10px;margin-top:26px;flex-wrap:wrap}
+button.act{appearance:none;font:500 14px/1 var(--sans);padding:10px 16px;border-radius:3px;
+  border:1px solid var(--rule-firm);background:var(--raised);color:var(--ink);cursor:pointer}
+button.act:hover{border-color:var(--ink-soft)}
+button.act.primary{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+button.act.primary:hover{background:var(--accent);border-color:var(--accent)}
+button.act.held:hover{border-color:var(--held);color:var(--held)}
+button.act.fading:hover{border-color:var(--fading);color:var(--fading)}
+
+/* ── reading: concepts and lessons ────────────────────────────────────────── */
+.list{border-top:1px solid var(--rule)}
+.item{border-bottom:1px solid var(--rule)}
+.item>summary{list-style:none;cursor:pointer;padding:14px 0;display:flex;gap:14px;
+  align-items:baseline}
+.item>summary::-webkit-details-marker{display:none}
+.item>summary:hover .item-title{color:var(--accent)}
+.item-title{font:500 15px/1.4 var(--sans);flex:1}
+.item-meta{font:500 11px/1 var(--mono);color:var(--ink-faint);flex:none;padding-top:3px}
+.item-meta .dot{display:inline-block;width:6px;height:6px;border-radius:50%;
+  background:var(--held);margin-right:7px;vertical-align:1px}
+.item-meta .dot.is-due{background:var(--fading)}
+.prose{font:400 15.5px/1.68 var(--serif);max-width:68ch;padding:0 0 22px;color:var(--ink)}
+.prose h4{font:600 13px/1.4 var(--sans);letter-spacing:.01em;color:var(--ink-faint);
+  margin:22px 0 6px}
+.prose h4:first-child{margin-top:0}
+.prose p{margin:0 0 11px}
+.prose ul{margin:0 0 11px;padding-left:19px}
+.prose li{margin:0 0 5px}
+.prose code{font:400 13px/1 var(--mono);background:var(--mark);padding:2px 5px;border-radius:3px}
+pre.code{background:var(--mark);border:1px solid var(--rule);border-radius:4px;
+  padding:12px 14px;overflow-x:auto;margin:0 0 12px}
+pre.code code{font:400 12.5px/1.6 var(--mono);background:none;padding:0;white-space:pre}
+.tags{font:500 11px/1 var(--mono);color:var(--ink-faint)}
+.tags i{font-style:normal}
+.tags i+i::before{content:"·";margin:0 5px;color:var(--rule-firm)}
+
+/* ── ledger ───────────────────────────────────────────────────────────────── */
+.ledger{width:100%;border-collapse:collapse;max-width:520px;margin:0 0 34px}
+.ledger caption{text-align:left;font:600 13px/1.4 var(--sans);color:var(--ink-faint);
+  padding:0 0 8px}
+.ledger td{padding:7px 0;border-bottom:1px solid var(--rule);font-size:14px}
+.ledger td+td{text-align:right;font:500 13px/1.4 var(--mono);color:var(--ink-soft);width:70px}
+
+.search{font:400 14px/1 var(--sans);padding:9px 12px;border-radius:3px;
+  border:1px solid var(--rule-firm);background:var(--raised);color:var(--ink);
+  width:280px;margin-bottom:4px}
+.search:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
+.empty{font:400 17px/1.5 var(--serif);color:var(--ink-soft);max-width:46ch;padding:18px 0}
+.empty code{font:400 13px/1 var(--mono);background:var(--mark);padding:2px 6px;border-radius:3px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+@media (max-width:620px){
+  .day{grid-template-columns:1fr;gap:0}
+  .day-date{position:static;padding:14px 0 2px}
+  .row{flex-wrap:wrap}
+  .row-learned{padding-left:0}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style></head><body>
-<header><h1>Learning dashboard</h1><p class="sub" id="sub"></p>
-<nav id="tabs"></nav></header><main id="view"></main>
+<div class="wrap">
+  <header>
+    <p class="state" id="state"></p>
+    <p class="state-sub" id="state-sub"></p>
+    <nav id="tabs"></nav>
+  </header>
+  <main id="view"></main>
+</div>
 <script id="data" type="application/json">${data}</script>
 <script>
 const D=JSON.parse(document.getElementById('data').textContent);
-const $=(h)=>{const d=document.createElement('div');d.innerHTML=h;return d};
 const view=document.getElementById('view'),tabs=document.getElementById('tabs');
-const TABS=['Revision','Timeline','Concepts','Lessons','Stats'];let cur='Revision',q='';
-document.getElementById('sub').textContent=
-  D.journal.length+' entries · '+D.concepts.length+' concepts · '+
-  D.concepts.filter(c=>c.due).length+' due today · '+D.lessons.length+' lessons';
-function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const h=s=>{const t=document.createElement('template');t.innerHTML=s.trim();return t.content};
+const TABS=[['Timeline',0],['Revision',1],['Concepts',0],['Lessons',0],['Stats',0]];
+let cur='Timeline',q='',deck=0;
+const dueList=()=>D.concepts.filter(c=>c.due).sort((a,b)=>b.seen-a.seen);
+const TRACK={bug:'bug',feature:'feat',tech_debt:'debt',sentry:'sntry'};
+
+function masthead(){
+  const n=dueList().length,c=D.concepts.length;
+  const el=document.getElementById('state'),sub=document.getElementById('state-sub');
+  if(!c){el.innerHTML='Nothing recorded yet.';
+    sub.innerHTML='Work shows up here on its own. Notes do not \\u2014 write one with <code>/tlv:concept</code> while the code is still in front of you.';return}
+  el.innerHTML=n?'<b>'+n+'</b> '+(n===1?'concept is':'concepts are')+' fading.'
+                :'<span class="ok">Nothing is fading today.</span>';
+  sub.textContent=n?'Each one comes back further out when you hold it, and tomorrow when you do not.'
+                   :c+' concept'+(c===1?'':'s')+' held. The next one is due when its interval runs out.';
+}
 function render(){
-  tabs.innerHTML=TABS.map(t=>'<button aria-selected="'+(t===cur)+'">'+t+(t==='Revision'&&D.concepts.filter(c=>c.due).length?' ('+D.concepts.filter(c=>c.due).length+')':'')+'</button>').join('');
-  [...tabs.children].forEach(b=>b.onclick=()=>{cur=b.textContent.replace(/ \\(\\d+\\)$/,'');render()});
-  view.innerHTML='';
-  ({Revision:revision,Timeline:timeline,Concepts:library,Lessons:lessonView,Stats:stats})[cur]();
+  tabs.innerHTML=TABS.map(([t,badge])=>'<button aria-current="'+(t===cur)+'">'+t+
+    (badge&&dueList().length?'<span class="count">'+dueList().length+'</span>':'')+'</button>').join('');
+  [...tabs.children].forEach(b=>b.onclick=()=>{cur=b.firstChild.textContent;render()});
+  view.innerHTML='';masthead();
+  ({Timeline:timeline,Revision:revision,Concepts:concepts,Lessons:lessons,Stats:stats})[cur]();
 }
-function revision(){
-  const due=D.concepts.filter(c=>c.due).sort((a,b)=>b.seen-a.seen);
-  if(!due.length){view.append($('<div class="card"><p class="muted">Nothing due. The ladder is clear — come back when a concept comes round again.</p></div>').firstChild);return}
-  view.append($('<p class="muted">Answer before you reveal. Honest "shaky" is what makes the schedule work — it resets the interval to one day.</p>').firstChild);
-  for(const c of due){
-    const qm=c.question;
-    const el=$('<div class="card"><div class="row"><strong>'+esc(c.title)+'</strong>'+
-      c.tags.map(t=>'<span class="tag">'+esc(t)+'</span>').join('')+
-      '<span class="tag">seen '+c.seen+'</span><span class="pill due">stage '+c.stage+'</span></div>'+
-      '<p style="margin:10px 0 6px"><strong>'+esc(qm)+'</strong></p>'+
-      '<div class="hide answer">'+window.MD(c.body)+'</div>'+
-      '<div class="row" style="margin-top:10px"><button class="act reveal">Reveal</button>'+
-      '<button class="act known hide">I know this</button><button class="act shaky hide">Shaky</button></div></div>').firstChild;
-    el.querySelector('.reveal').onclick=()=>{el.querySelector('.answer').classList.remove('hide');
-      el.querySelector('.reveal').classList.add('hide');
-      el.querySelector('.known').classList.remove('hide');el.querySelector('.shaky').classList.remove('hide')};
-    for(const r of ['known','shaky'])el.querySelector('.'+r).onclick=async()=>{
-      const res=await fetch('/api/review',{method:'POST',headers:{'content-type':'application/json'},
-        body:JSON.stringify({slug:c.slug,result:r})}).then(x=>x.json());
-      c.due=false;el.innerHTML='<p class="muted">'+esc(c.title)+' — '+r+', next in '+res.nextIn+' day(s).</p>'};
-    view.append(el)
-  }
-}
+function empty(msg){view.append(h('<p class="empty">'+msg+'</p>'))}
+
 function timeline(){
+  if(!D.journal.length)return empty('No entries yet. One is written each time a run starts.');
   const by={};for(const e of D.journal)(by[e.date]=by[e.date]||[]).push(e);
-  const days=Object.keys(by).sort().reverse();
-  if(!days.length){view.append($('<div class="card"><p class="muted">No entries yet. They appear automatically when a run starts.</p></div>').firstChild);return}
-  for(const d of days){
-    view.append($('<h2>'+d+'</h2>').firstChild);
-    for(const e of by[d]) view.append($('<div class="card"><div class="row"><span class="pill">'+esc(e.track)+'</span>'+
-      '<strong>'+esc(e.ticket)+'</strong> '+esc(e.title||'')+'<span class="tag">'+esc(e.repo)+'</span></div>'+
-      (e.summary?'<p>'+esc(e.summary)+'</p>':'')+
-      (e.areas||[]).map(a=>'<span class="tag">'+esc(a)+'</span>').join(' ')+
-      ((e.concepts||[]).length?'<p class="muted" style="margin-top:8px">learned: '+e.concepts.map(esc).join(', ')+'</p>':'')+
-      ((e.prs||[]).length?'<p class="muted">'+e.prs.map(p=>'<a href="'+esc(p)+'">'+esc(p.split('/').pop())+'</a>').join(' · ')+'</p>':'')+
-      '</div>').firstChild)
+  for(const d of Object.keys(by).sort().reverse()){
+    const rows=by[d].map(e=>{
+      const id=e.prs&&e.prs.length
+        ? '<a href="'+esc(e.prs[0])+'" target="_blank" rel="noreferrer">'+esc(e.ticket)+'</a>'
+        : esc(e.ticket);
+      return '<div class="row"><span class="track '+esc(e.track)+'" title="'+esc(e.track.replace('_',' '))+'">'+
+        esc(TRACK[e.track]||e.track.slice(0,4))+'</span>'+
+        '<span class="row-id">'+id+'</span>'+
+        (e.title?'<span class="row-title">'+esc(e.title)+'</span>':'')+'</div>'+
+        ((e.concepts||[]).length?'<span class="row-learned">learned '+
+          e.concepts.map(c=>'<i>'+esc(c)+'</i>').join(', ')+'</span>':'');
+    }).join('');
+    view.append(h('<section class="day"><div class="day-date">'+d+'</div><div class="day-rows">'+rows+'</div></section>'));
   }
 }
-function library(){
-  const bar=$('<div class="row" style="margin-bottom:12px"><input type="search" placeholder="filter concepts…"></div>').firstChild;
-  const inp=bar.querySelector('input');inp.value=q;inp.oninput=()=>{q=inp.value;render();setTimeout(()=>{const i=view.querySelector('input');i&&i.focus()})};
+
+function revision(){
+  const list=dueList();
+  if(!list.length)return empty('Nothing due. Concepts come back on their own \\u2014 1, 3, 7, 21 then 60 days.');
+  if(deck>=list.length)deck=0;
+  const c=list[deck];
+  const el=h('<div class="deck">'+
+    '<p class="deck-pos">'+(deck+1)+' of '+list.length+'</p>'+
+    '<p class="q">'+inlineMd(c.question)+'</p>'+
+    '<p class="q-meta"><span>'+esc(c.title)+'</span><span>met '+c.seen+'\\u00d7</span>'+
+      (c.lastReview&&c.lastReview!=='never'?'<span>last seen '+esc(c.lastReview)+'</span>':'<span>never reviewed</span>')+'</p>'+
+    '<div class="answer" hidden><div class="prose">'+
+      window.MD(c.body.replace(/\\n##\\s*Revise with[\\s\\S]*$/,''))+'</div></div>'+
+    '<div class="acts"><button class="act primary reveal">Show the answer</button></div></div>').firstElementChild;
+  const acts=el.querySelector('.acts');
+  el.querySelector('.reveal').onclick=()=>{
+    el.querySelector('.answer').hidden=false;
+    acts.innerHTML='<button class="act held" data-r="known">I had this</button>'+
+                   '<button class="act fading" data-r="shaky">Not solid</button>';
+    acts.querySelectorAll('button').forEach(b=>b.onclick=async()=>{
+      const r=b.dataset.r;
+      const res=await fetch('/api/review',{method:'POST',headers:{'content-type':'application/json'},
+        body:JSON.stringify({slug:c.slug,result:r})}).then(x=>x.json()).catch(()=>({}));
+      c.due=false;c.stage=res.stage??c.stage;c.lastReview=D.today;
+      deck=0;render();
+      view.prepend(h('<p class="deck-pos">'+esc(c.title)+' \\u2014 back in '+(res.nextIn??1)+' day'+((res.nextIn??1)===1?'':'s')+'</p>'));
+    });
+  };
+  view.append(el);
+}
+
+function readingList(items,build){
+  const frag=document.createElement('div');frag.className='list';
+  for(const it of items)frag.append(h(build(it)));
+  view.append(frag);
+}
+function concepts(){
+  if(!D.concepts.length)return empty('No notes yet. Write one with <code>/tlv:concept</code> at the end of a piece of work.');
+  const bar=h('<input class="search" type="search" placeholder="Filter notes" value="'+esc(q)+'">').firstElementChild;
+  bar.oninput=()=>{q=bar.value;render();const i=view.querySelector('.search');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}};
   view.append(bar);
   const list=D.concepts.filter(c=>!q||(c.title+c.slug+c.tags.join()+c.body).toLowerCase().includes(q.toLowerCase()))
     .sort((a,b)=>b.seen-a.seen||a.title.localeCompare(b.title));
-  const g=$('<div class="grid"></div>').firstChild;
-  for(const c of list)g.append($('<div class="card"><div class="row"><strong>'+esc(c.title)+'</strong></div>'+
-    '<div class="row" style="margin:6px 0">'+c.tags.map(t=>'<span class="tag">'+esc(t)+'</span>').join('')+
-    '<span class="tag">seen '+c.seen+'</span><span class="pill '+(c.due?'due':'known')+'">'+(c.due?'due':'stage '+c.stage)+'</span></div>'+
-    '<details><summary>open</summary>'+window.MD(c.body)+
-    '<p class="muted">first '+esc(c.first)+' · last '+esc(c.last)+' · reviews '+c.reviews+(c.shaky?' · shaky '+c.shaky:'')+'</p></details></div>').firstChild);
-  view.append(g)
+  if(!list.length)return empty('Nothing matches \\u201c'+esc(q)+'\\u201d.');
+  readingList(list,c=>'<details class="item"><summary>'+
+    '<span class="item-title">'+esc(c.title)+'</span>'+
+    '<span class="item-meta"><span class="dot'+(c.due?' is-due':'')+'"></span>met '+c.seen+'\\u00d7</span></summary>'+
+    '<div class="prose">'+window.MD(c.body)+'</div>'+
+    '<p class="tags">'+c.tags.map(t=>'<i>'+esc(t)+'</i>').join('')+'</p></details>');
 }
-function lessonView(){
-  if(!D.lessons.length){view.append($('<div class="card"><p class="muted">No lessons yet.</p></div>').firstChild);return}
-  for(const l of D.lessons)view.append($('<div class="card"><div class="row"><strong>'+esc(l.slug)+'</strong>'+
-    '<span class="tag">'+esc(l.destination)+'</span><span class="pill '+(l.status==='applied'?'known':'due')+'">'+esc(l.status)+'</span>'+
-    (l.outcome?'<span class="tag">'+esc(l.outcome)+'</span>':'')+'<span class="tag">seen '+l.seen+'</span></div>'+
-    '<details><summary>open</summary>'+window.MD(l.body)+'</details></div>').firstChild)
+function lessons(){
+  if(!D.lessons.length)return empty('No rules yet. They are written when review lands on a pull request.');
+  readingList(D.lessons,l=>'<details class="item"><summary>'+
+    '<span class="item-title">'+esc(l.slug)+'</span>'+
+    '<span class="item-meta">'+esc(l.destination)+' \\u00b7 '+esc(l.status)+'</span></summary>'+
+    '<div class="prose">'+window.MD(l.body)+'</div></details>');
 }
 function stats(){
-  const byTrack={},byTag={},byWeek={};
+  const byTrack={},byMonth={},byTag={};
   for(const e of D.journal){byTrack[e.track]=(byTrack[e.track]||0)+1;
-    const w=e.date.slice(0,7);byWeek[w]=(byWeek[w]||0)+1}
+    const m=e.date.slice(0,7);byMonth[m]=(byMonth[m]||0)+1}
   for(const c of D.concepts)for(const t of c.tags)byTag[t]=(byTag[t]||0)+1;
-  const box=(l,v)=>'<div class="card"><div class="stat">'+v+'</div><div class="muted">'+l+'</div></div>';
-  view.append($('<div class="grid">'+box('runs',D.journal.length)+box('concepts',D.concepts.length)+
-    box('due today',D.concepts.filter(c=>c.due).length)+box('rules learned',D.lessons.filter(l=>l.status==='applied').length)+'</div>').firstChild);
-  const tbl=(t,o)=>'<h2>'+t+'</h2><div class="card">'+(Object.keys(o).length?Object.entries(o).sort((a,b)=>b[1]-a[1])
-    .map(([k,v])=>'<div class="row"><span style="width:200px">'+esc(k)+'</span><span class="muted">'+v+'</span></div>').join(''):'<p class="muted">nothing yet</p>')+'</div>';
-  view.append($(tbl('by track',byTrack)+tbl('by month',byWeek)+tbl('concepts by tag',byTag)).firstChild.parentNode)
+  const tbl=(cap,o,emptyMsg)=>'<table class="ledger"><caption>'+cap+'</caption><tbody>'+
+    (Object.keys(o).length?Object.entries(o).sort((a,b)=>b[1]-a[1])
+      .map(([k,v])=>'<tr><td>'+esc(k.replace('_',' '))+'</td><td>'+v+'</td></tr>').join('')
+      :'<tr><td>'+emptyMsg+'</td><td>0</td></tr>')+'</tbody></table>';
+  view.append(h(tbl('Runs by track',byTrack,'none yet')));
+  view.append(h(tbl('Runs by month',byMonth,'none yet')));
+  view.append(h(tbl('Notes by tag',byTag,'none yet')));
 }
-window.MD=${md.toString().replace(/esc\(/g,'esc(')};
+window.MD=${md.toString()};
+const inlineMd=${inlineMd.toString()};
 render();
 </script></body></html>`;
 }
-
 const srv = createServer((req, res) => {
   if (req.method === 'POST' && req.url === '/api/review') {
     let b = ''; req.on('data', c => b += c);
